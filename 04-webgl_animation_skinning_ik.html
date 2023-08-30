@@ -1,0 +1,278 @@
+<!--
+* @Author:WangZhiYu
+* @Date: 2023/07/10 19:41:18
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-08-21 10:20:20
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>template</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      // 初始化threejs模板
+      import { InitThree, THREE, OrbitControls } from './initThree.js';
+      import { CCDIKSolver, CCDIKHelper } from './public/animation/CCDIKSolver.js';
+      import Stats from 'three/addons/libs/stats.module.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+      // 变换控制器
+      import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+      // 定义当前demo实例
+      class CurrentDemo extends InitThree {
+        constructor() {
+          // 实例化父类
+          super({
+            // 设置renderer
+            // 启用对数深度缓冲,主要作用为显示远距离的物体不会出现失帧和精度损失的情况,对数深度缓冲使用对数函数重新映射深度值,可以使远处的物体更加的均匀的分布在场景里
+            renderer: new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true }),
+            // 设置camera
+            camera: new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.001, 5000),
+            // 初始化函数
+            initFn() {
+              // 调整camera的位置
+              this.option.camera.position.set(0.9728517749133652, 1.1044765132727201, 0.7316689528482836);
+
+              // 设置相机的焦点为场景的中心位置
+              this.option.camera.lookAt(this.option.scene.position);
+
+              // 设置渲染器的输出格式,便于在不同浏览器中显示出来的效果相同
+              this.option.renderer.outputEncoding = THREE.sRGBEncoding;
+
+              // 禁用旧版的灯光渲染方法
+              this.option.renderer.useLegacyLights = false;
+
+              /**
+               * 环境中添加指数雾,fog是线性雾,fogEx2是指数雾
+               *
+               * @params {color} 雾的颜色
+               * @params {density} 定义雾的密度
+               */
+              this.option.scene.fog = new THREE.FogExp2(0xffffff, 0.17);
+
+              this.option.scene.background = new THREE.Color(0xdddddd);
+
+              // 重新设置一个新的控制器,这个控制器绑定的camera也是最新的camera
+              // this.option.controls = new OrbitControls(this.option.camera, this.option.renderer.domElement)
+
+              // 开启控制器阻尼效果
+              this.option.controls.enableDamping = true;
+
+              // 设置相机外移距离,只适用于perspectiveCamera相机
+              this.option.controls.minDistance = 0.2;
+
+              // 设置相机内移距离, 只适用于perspectiveCamera相机
+              this.option.controls.maxDistance = 1.5;
+
+              /**
+               * 添加环境光
+               * 环境光会均匀的照亮场景中的所有物体,并且环境光不能用来投射阴影,因为它没有方向
+               * @params {color} 环境光的颜色
+               * @params {intensity} 光照的强度
+               */
+              const ambientLight = new THREE.AmbientLight(0xffffff, 8);
+              this.option.scene.add(ambientLight);
+
+              // 全局导入的模型
+              this.model = null;
+
+              // 导入模型
+              this.importModel();
+
+              // 显示帧率
+              this.showFPS();
+
+              // 要进行操作的模型零件
+              this.modelPart = {};
+
+              // 镜像球体摄像机
+              this.mirrorSphereCamera = null;
+
+              // 坐标向量,用于标识坐标,使用的时候会先赋值,之后再进行使用
+              this.v0 = new THREE.Vector3();
+
+              // 开始渲染
+              this.render(() => {
+                // 更新帧率
+                this.stats.update();
+                let v0 = new THREE.Vector3();
+                // 小球模型以及立方体相机都存在才会执行
+                if (this.modelPart['boule'] && this.mirrorSphereCamera) {
+                  // 隐藏小球
+                  this.modelPart['boule'].visible = false;
+
+                  // 获取小球的世界坐标系的坐标,赋值给立体相机的坐标
+                  this.modelPart['boule'].getWorldPosition(this.mirrorSphereCamera.position);
+
+                  // 更新相机
+                  this.mirrorSphereCamera.update(this.option.renderer, this.option.scene);
+
+                  // 显示小球
+                  this.modelPart['boule'].visible = true;
+                }
+
+                // 判断是否有小球模型
+                if (this.modelPart['boule']) {
+                  // 将小球模型的世界坐标复制到v0中
+                  this.modelPart['boule'].getWorldPosition(this.v0);
+
+                  // 设置控制器的目标点,并且使用lerp进行线性差值,lerp是threejs中的一个方法,这里用于从一个点到另一个点的过渡,使用this.v0作为插值的起点,0.1表示过渡权重,表示从this.option.controls.target过渡到this.v0的程度,实现平滑的过渡效果
+                  this.option.controls.target.lerp(this.v0, 0.1);
+                }
+
+                // 获取到手臂模型以及小球模型之后才会执行
+                if (this.modelPart['head'] && this.modelPart['boule']) {
+                  // 获取小球的世界坐标复制到this.v0里
+                  this.modelPart['boule'].getWorldPosition(this.v0);
+
+                  // 设置head的头部对象所指向的方向为小球的世界坐标(this.v0)
+                  this.modelPart['head'].lookAt(this.v0);
+
+                  // 旋转手臂模型
+                  this.modelPart['head'].rotation.set(this.modelPart['head'].rotation.x, this.modelPart['head'].rotation.y + Math.PI, this.modelPart['head'].rotation.z);
+                }
+
+                // 更新小球,手臂等部分的移动
+                if (this.IKSolver) this.IKSolver.update();
+              });
+            },
+          });
+        }
+        // 显示FPS帧率
+        showFPS() {
+          this.stats = new Stats();
+          document.querySelector(this.option.root).appendChild(this.stats.dom);
+        }
+
+        // 导入模型
+        importModel() {
+          // 要单独设置的模型零件白名单
+          let setWhite = ['head', 'lowerarm_l', 'Upperarm_l', 'hand_l', 'target_hand_l', 'boule', 'Kira_Shirt_left'];
+          this.initExample('./models/gltf/kira.glb', gltf => {
+            this.model = gltf;
+
+            // 模型添加到场景中
+            this.option.scene.add(gltf.scene);
+
+            // 遍历模型的所有对象以及其子对象
+            gltf.scene.traverse(e => {
+              // 查找当前循环的模型对象是否在白名单中
+              if (setWhite.includes(e.name)) {
+                // 如果在白名单中,就将其赋值给modelPart,便于后续再其他地方的处理
+                this.modelPart[e.name] = e;
+              }
+
+              // 对mesh对象禁止椎体裁剪
+              if (e.isMesh) e.frustumCulled = false;
+            });
+
+            console.log(this.modelPart, 'this.modelPart');
+
+            // 控制控制器的目标点为boule(也就是小球)
+            this.option.controls.target.copy(this.modelPart['boule'].position);
+
+            // 将boule对象添加到hand_l对象中(将小球对象添加到左手对象中),attach可以将一个对象附加到另一个对象中,形成连接关系,注意这里是连接关系,并非为父子关系,add方法会将一个对象添加到另一个对象中,形成父子关系,这里的连接关系也可以使小球跟随左手进行移动
+            this.modelPart['hand_l'].attach(this.modelPart['boule']);
+
+            // 创建一个用于渲染到立方体贴图的渲染目标对象,size可以指定渲染目标的大小
+            const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(1024);
+
+            /**
+             * 创建一个立方体相机,它可以在六个方向上分别渲染场景,并且将结果存储为一个立方体贴图,所以就可以映射出周围的场景了
+             * @params {near} 近平面
+             * @params {far} 远平面
+             * @params {renderTarget} 立方体渲染目标对象,用于将场景渲染到贴图上
+             */
+            this.mirrorSphereCamera = new THREE.CubeCamera(0.05, 50, cubeRenderTarget);
+
+            // 将立方体相机添加到场景中
+            this.option.scene.add(this.mirrorSphereCamera);
+
+            // 创建一个材质,并且应用材质的贴图为WebGLCubeRenderTarget生成的立方体贴图
+            const mirrorSphereMaterial = new THREE.MeshBasicMaterial({
+              envMap: cubeRenderTarget.texture,
+            });
+
+            // 材质应用到小球上
+            this.modelPart['boule'].material = mirrorSphereMaterial;
+
+            // 创建一个控制器,transformControls可以在场景中对一个物体进行物体变换(平移,旋转,缩放)的控制器
+            this.transformControls = new TransformControls(this.option.camera, this.option.renderer.domElement);
+
+            // 设置控制器的大小
+            this.transformControls.size = 0.75;
+
+            // 不显示控制器的X轴
+            this.transformControls.showX = false;
+
+            // 设置控制器的坐标为世界坐标
+            this.transformControls.space = 'world';
+
+            // 设置控制器管理模型target_hand_l
+            this.transformControls.attach(this.modelPart['target_hand_l']);
+
+            // 控制器添加到场景里
+            this.option.scene.add(this.transformControls);
+
+            // 监听控制器鼠标按下事件,按下时禁用OrbitControls控制器,这样就不会再拖动transformControls的时候触发OrbitControls的效果了
+            this.transformControls.addEventListener('mouseDown', () => {
+              this.option.controls.enabled = false;
+            });
+
+            // 监听控制器鼠标抬起事件,接触OrbitControls的禁用
+            this.transformControls.addEventListener('mouseUp', () => {
+              this.option.controls.enabled = true;
+            });
+
+            this.modelPart['Kira_Shirt_left'].add(this.modelPart.Kira_Shirt_left.skeleton.bones[0]);
+
+            // 用于CCDISolver的配置数组(逆运动学 (IK) 求解)
+            const iks = [
+              {
+                // 目标点的索引为22,也就是target_hand_l
+                target: 22,
+                // 末端的索引为6,指向hand_l,具体指向的模型需要根据场景的内容进行判断
+                effector: 6,
+                // 对上臂以及下臂的约束
+                links: [
+                  // 对下臂的约束配置
+                  {
+                    // 表示链接骨骼的索引或者名称
+                    index: 5,
+                    // 骨骼的各个轴的最大角度约束和最小角度约束
+                    rotationMin: new THREE.Vector3(10.2, -1.8, -0.4),
+                    rotationMax: new THREE.Vector3(1.7, -1.1, 0.3),
+                  },
+                  // 对上臂的约束配置
+                  {
+                    index: 4,
+                    rotationMin: new THREE.Vector3(0.1, -0.7, -1.8),
+                    rotationMax: new THREE.Vector3(1.1, 0, -1.4),
+                  },
+                ],
+              },
+            ];
+            this.IKSolver = new CCDIKSolver(this.modelPart['Kira_Shirt_left'], iks);
+            const ccdikhelper = new CCDIKHelper(this.modelPart['Kira_Shirt_left'], iks, 0.01);
+            this.option.scene.add(ccdikhelper);
+          });
+        }
+      }
+      const currentDemo = new CurrentDemo();
+    </script>
+  </body>
+</html>

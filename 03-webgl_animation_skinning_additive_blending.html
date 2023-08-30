@@ -1,0 +1,239 @@
+<!--
+* @Author:WangZhiYu
+* @Date: 2023/07/24 10:26:53
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-08-21 10:20:12
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>Document</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      // 初始化threejs模板
+      import { InitThree, THREE } from './initThree.js';
+      import Stats from 'three/addons/libs/stats.module.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+      class CurrentDemo extends InitThree {
+        constructor() {
+          // 实例化父类
+          super();
+
+          // 初始化帧率显示器
+          this.showFPS();
+
+          // 设置摄像机的位置
+          this.setCameraPosition(-1, 2, 3);
+
+          // 实例化GUI控制器
+          this.gui = new GUI({ width: 310 });
+
+          // 初始化
+          this.initFn();
+
+          // 导入模型
+          this.importModel();
+        }
+
+        // 初始化环境
+        initFn() {
+          // 解构获取需要的变量
+          const { scene, camera, renderer, controls } = this.option;
+
+          // 设置场景的背景颜色
+          scene.background = new THREE.Color(0xa0a0a0);
+
+          // 设置时钟,更新动画
+          this.clock = new THREE.Clock();
+
+          // 设置全局GUI参数对象
+          this.settings = {};
+
+          /**
+           * 添加雾形效果
+           * @params {color} 雾的颜色
+           * @params {near} 开始应用雾效果的最小距离,距离小于这个最小距离的物体不会收到影响
+           * @params {far} 结束应用雾效果的最小距离,超出这个距离的物体不会收到影响
+           */
+          scene.fog = new THREE.Fog(0xa0a0a0, 10, 50);
+
+          /**
+           * 添加半球光
+           * 光源直接放在场景的上面,光照颜色从天空颜色渐变到地面颜色,注意半球光不会反射阴影
+           * @params {skyColor} 天空颜色
+           * @params {groundColor} 地面颜色
+           * @params {intensity} 光照强度,默认为1
+           */
+          const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+
+          // 设置半球光的位置
+          hemisphereLight.position.set(0, 20, 0);
+          scene.add(hemisphereLight);
+
+          /**
+           * 添加平行光
+           * 设置平行光的位置,投射阴影以及手动设置计算平行光的阴影参数(设置平行光相机的远近端面和平行光阴影的裁剪位置)
+           */
+          const directionalLight = new THREE.DirectionalLight(0xffffff);
+          directionalLight.position.set(3, 10, 10);
+          directionalLight.castShadow = true;
+          directionalLight.shadow.camera.top = 2;
+          directionalLight.shadow.camera.bottom = -2;
+          directionalLight.shadow.camera.left = -2;
+          directionalLight.shadow.camera.right = 2;
+          directionalLight.shadow.camera.near = 0.1;
+          directionalLight.shadow.camera.far = 40;
+          scene.add(directionalLight);
+
+          // 设置白色平面(模型站立的平面)
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshPhongMaterial({ color: 0xffffff, depthWrite: false, side: THREE.DoubleSide }));
+          // 倾斜平面
+          mesh.rotation.x = -Math.PI / 2;
+          // 设置平面接受阴影
+          mesh.receiveShadow = true;
+          scene.add(mesh);
+
+          // 渲染器启用阴影映射
+          renderer.shadowMap.enabled = true;
+
+          // 设置渲染器的输出编码,用于确保在不同设备和平台上显示颜色时的一致性
+          renderer.outputEncoding = THREE.sRGBEncoding;
+
+          // 禁用摄像机平移
+          controls.enablePan = false;
+
+          // 禁用控制器缩放
+          controls.enableZoom = false;
+
+          // 设置控制器的焦点,相机对象的轨道围绕这个焦点运行,这个焦点可以再任何时候被手动更新
+          controls.target.set(0, 1, 0);
+
+          // 修改控制器参数之后需要手动更新
+          controls.update();
+
+          // 执行渲染器,并且传入回调,这个回调会在每次渲染器执行的时候调用
+          this.render(() => {
+            // 更新帧率
+            this.stats.update();
+
+            // 如果存在动画则对动画进行更新
+            if (this.mixer) {
+              // 获取时钟初始化到当前的时间,作为标识来控制动画的进度
+              const delta = this.clock.getDelta();
+
+              // 根据时间差来控制动画的播放
+              this.mixer.update(delta);
+            }
+          });
+        }
+
+        // 显示帧率信息
+        showFPS() {
+          // 实例化帧率显示器
+          this.stats = new Stats();
+
+          // 帧率显示添加到指定dom中
+          document.querySelector(this.option.root).appendChild(this.stats.dom);
+        }
+
+        // 导入模型
+        importModel() {
+          // 导入gltf模型
+          this.initExample('./models/gltf/Xbot.glb', model => {
+            this.model = model.scene;
+            this.option.scene.add(model.scene);
+
+            // 循环模型的每个零件,设置投射阴影
+            this.model.traverse(function (object) {
+              if (object.isMesh) object.castShadow = true;
+            });
+
+            // 单独处理动画
+            this.processAnimation(model);
+          });
+        }
+
+        // 处理动画
+        processAnimation(model) {
+          // 实例化指定模型的动画混合器,用于设置动画
+          this.mixer = new THREE.AnimationMixer(model.scene);
+
+          // 赋值全局变量,便于其他地方使用和修改
+          this.animations = model.animations.map(item => this.mixer.clipAction(item));
+
+          // 添加GUI控制各个动画的播放
+          const folder1 = this.gui.addFolder('播放动画');
+
+          // 设置动画权重
+          const folder2 = this.gui.addFolder('设置权重');
+
+          // 设置动画播放速度
+          const folder3 = this.gui.addFolder('动画速度');
+
+          this.settings['动画速度'] = 1;
+          folder3.add(this.settings, '动画速度', -5, 10, 1).onChange(speed => {
+            this.mixer.timeScale = speed;
+          });
+
+          this.animations.forEach(item => {
+            // 添加动画播放回调函数,会在用户点击GUI按钮时触发
+            this.settings[item._clip.name] = () => {
+              // 首先将所有的动画权重设置为0
+              this.animations.forEach(item => {
+                this.setWeight(item, 0);
+
+                // 实时设置动画权重
+                this.settings[`${item._clip.name}_weight`] = item.getEffectiveWeight();
+              });
+              // 设置当前动画的权重为1,这样下边播放动画就不会出现暂停的情况了
+              this.setWeight(item, 1);
+
+              // 实时设置动画权重
+              this.settings[`${item._clip.name}_weight`] = item.getEffectiveWeight();
+
+              item.play();
+            };
+            folder1.add(this.settings, item._clip.name);
+
+            this.settings[`${item._clip.name}_weight`] = item.getEffectiveWeight();
+            folder2
+              .add(this.settings, `${item._clip.name}_weight`, 0, 1, 0.1)
+              .listen()
+              .onChange(e => {
+                this.setWeight(item, e);
+              });
+          });
+        }
+
+        // 设置动画权重
+        setWeight(action, weight) {
+          // 启动动画
+          action.enabled = true;
+
+          // 设置动画为正常的播放速度
+          action.setEffectiveTimeScale(1);
+
+          // 设置动画的权重
+          action.setEffectiveWeight(weight);
+        }
+      }
+
+      const currentDemo = new CurrentDemo();
+    </script>
+  </body>
+</html>

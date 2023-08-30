@@ -1,0 +1,179 @@
+<!--
+ * @Author: wangzhiyu
+ * @Date: 2023-08-29 14:48:40
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-08-29 16:53:22
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>template</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      // 初始化threejs模板
+      import { InitThree, THREE } from './initThree.js';
+      import Stats from 'three/addons/libs/stats.module.js';
+      import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+      class CurrentDemo extends InitThree {
+        constructor() {
+          super();
+
+          // 初始化函数
+          this.initFn();
+
+          // 显示FPS
+          this.showFPS();
+
+          // 执行渲染器
+          this.render(() => {
+            // 如果stats存在就在渲染器执行渲染的时候更新FPS
+            if (this.stats) {
+              this.stats.update();
+            }
+
+            if (this.clock && this.mixer) {
+              let delta = this.clock.getDelta();
+              // this.mixer.action1.update(delta)
+              // this.mixer.action2.update(delta)
+              // this.mixer.action3.update(delta)
+              // 更新动画
+              Object.values(this.mixer).forEach(item => {
+                item.update(delta);
+              });
+            }
+          });
+        }
+
+        // 初始化函数
+        initFn() {
+          const { scene, renderer, camera, controls } = this.option;
+
+          // 设置相机位置
+          camera.position.set(2, 2, -6);
+
+          // 设置相机焦点
+          camera.lookAt(0, 1, 0);
+
+          // 禁用控制器
+          controls.enabled = false;
+
+          // 创建Clock时钟,用于更新动画效果
+          this.clock = new THREE.Clock();
+
+          // 设置渲染器的输出格式,保证在不同的浏览器以相同的输出显示场景
+          renderer.outputEncoding = THREE.sRGBEncoding;
+
+          // 设置renderer渲染器渲染莹莹
+          renderer.shadowMap.enabled = true;
+
+          // 设置场景颜色
+          scene.background = new THREE.Color(0xa0a0a0);
+
+          /**
+           * 设置场景中的雾效果
+           * @param color color 雾的颜色
+           * @param number near 应用雾的最小距离
+           * @param number far 应用雾的最大距离
+           */
+          scene.fog = new THREE.Fog(0xa0a0a0, 10, 50);
+
+          // 创建半球光
+          const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+          hemiLight.position.set(0, 20, 0);
+          scene.add(hemiLight);
+
+          // 创建平行光,平行光会根据配置设置位置以及颜色+近端面(near)和远端面(far)
+          const dirLight = new THREE.DirectionalLight(0xffffff);
+          dirLight.position.set(-3, 10, -10);
+          // 设置平行光投射阴影
+          dirLight.castShadow = true;
+          dirLight.shadow.camera.top = 4;
+          dirLight.shadow.camera.bottom = -4;
+          dirLight.shadow.camera.left = -4;
+          dirLight.shadow.camera.right = 4;
+          dirLight.shadow.camera.near = 0.1;
+          dirLight.shadow.camera.far = 40;
+          scene.add(dirLight);
+
+          // 创建平面
+          const plane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false }));
+          // 设置平面位置,使其平铺在模型脚下
+          plane.rotation.x = -Math.PI / 2;
+          // 设置平面接受阴影
+          plane.receiveShadow = true;
+          scene.add(plane);
+
+          // 导入模型
+          this.importModal();
+        }
+
+        // 显示FPS
+        showFPS() {
+          // 实例化stats
+          this.stats = new Stats();
+
+          // 将stats的dom挂载到页面中
+          document.querySelector(this.option.root).appendChild(this.stats.dom);
+        }
+
+        // 导入模型
+        importModal() {
+          this.initExample('./models/gltf/Soldier.glb', gltf => {
+            // 控制gltf.scene的所有mesh零件都投射阴影
+            gltf.scene.traverse(obj => {
+              // 如果模型的零件时mesh的话就设置投射阴影参数为true
+              if (obj.isMesh) obj.castShadow = true;
+            });
+            // 利用threejs的骨骼工具SkeletonUtils中的clone功能,将模型clone出来
+            const model1 = SkeletonUtils.clone(gltf.scene);
+            const model2 = SkeletonUtils.clone(gltf.scene);
+            const model3 = SkeletonUtils.clone(gltf.scene);
+
+            // 将三个克隆出来的模型都添加到场景中
+            this.option.scene.add(model1, model2, model3);
+
+            // 分别控制三个模型的位置
+            model1.position.x = -2;
+            model2.position.x = 0;
+            model3.position.x = 2;
+
+            // 创建全局动画混合器父对象
+            this.mixer = {};
+
+            // 给每个模型单独创建动画混合器
+            this.mixer.action1 = new THREE.AnimationMixer(model1); // model1的动画混合器
+            this.mixer.action2 = new THREE.AnimationMixer(model2); // model2的动画混合器
+            this.mixer.action3 = new THREE.AnimationMixer(model3); // model3的动画混合器
+
+            // 执行model1的动画混合器:
+            // this.mixer.action1.clipAction(model1):使用动画混合器得到动画动作
+            // play():并执行动画
+            this.mixer.action1.clipAction(gltf.animations[0]).play();
+
+            // 执行model2的动画混合器:
+            this.mixer.action2.clipAction(gltf.animations[1]).play();
+
+            // 执行model3的动画混合器:
+            this.mixer.action3.clipAction(gltf.animations[3]).play();
+          });
+        }
+      }
+      const currentDemo = new CurrentDemo();
+    </script>
+  </body>
+</html>

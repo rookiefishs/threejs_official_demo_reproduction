@@ -1,0 +1,307 @@
+<!--
+ * @Author: wangzhiyu
+ * @Date: 2023-08-30 09:15:09
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-08-30 17:19:27
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>template</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      // 初始化threejs模板
+      import { InitThree, THREE } from './initThree.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+      import Stats from 'three/addons/libs/stats.module.js';
+
+      class CurrentDemo extends InitThree {
+        constructor() {
+          super({
+            // 设置自定义camera
+            camera: new THREE.PerspectiveCamera(50, 0.5 * (window.innerWidth / window.innerHeight), 1, 10000),
+
+            // 页面变化回调函数
+            resizeCallback: that => {
+              let size = that.option.isWindowSize ? { width: window.innerWidth, height: window.innerHeight } : { width: that.option.width, height: window.innerHeight };
+
+              // 设置渲染器尺寸
+              that.option.renderer.setSize(size.width, size.height);
+              // 更新相机宽高比
+              that.option.camera.aspect = 0.5 * (window.innerWidth / window.innerHeight);
+
+              // 更新相机投影矩阵
+              that.option.camera.updateProjectionMatrix();
+            },
+          });
+
+          // 本次demo实现初始化函数
+          this.initFn();
+
+          // FPS实时展示
+          this.shwoFps();
+
+          this.render(() => {
+            if (this.stats) this.stats.update();
+
+            if (this.whiteCircle && this.activeCamera && this.cameraGroup) {
+              let { scene, renderer, camera, width, height, isWindowSize } = this.option;
+
+              // 更新width+height
+              let size = isWindowSize ? { width: window.innerWidth, height: window.innerHeight } : { width, height };
+
+              // 通过时间戳*0.0005获取一个不断增大的数字
+              const time = Date.now() * 0.0005;
+
+              // 设置白色小球的位置
+              this.whiteCircle.position.x = 700 * Math.cos(time);
+              this.whiteCircle.position.z = 700 * Math.sin(time);
+              this.whiteCircle.position.y = 700 * Math.sin(time);
+
+              // 设置绿色小球的位置
+              this.whiteCircle.children[0].position.x = 70 * Math.cos(2 * time);
+              this.whiteCircle.children[0].position.z = 70 * Math.sin(time);
+
+              // 判断如果当前的相机是否为perspectiveCamera相机
+              if (this.activeCamera === this.customCamera) {
+                // 设置相机的摄像机视锥体垂直视野角度
+                this.customCamera.fov = 35 + 30 * Math.sin(0.5 * time);
+
+                // 设置相机的摄像机视锥体远端面
+                this.customCamera.far = this.whiteCircle.position.length();
+
+                // 修改相机的配置后,需要使用updateProjectionMatrix方法更新相机
+                this.customCamera.updateProjectionMatrix();
+
+                // 更新perspectiveCamera相机的辅助线
+                this.cameraHelper.update();
+
+                // 显示perspectiveCamera相机的辅助线
+                this.cameraHelper.visible = true;
+
+                // 隐藏orthographicCamera相机的辅助线
+                this.orthographicCameraHelper.visible = false;
+              } else {
+                // 如果当前相机为orthographicCamera相机
+
+                // 配置orthographicCamera相机的垂直视野角度
+                this.orthographicCamera.far = this.whiteCircle.position.length();
+
+                // 修改相机配置后,调用updateProjectionMatrix方法更新相机
+                this.orthographicCamera.updateProjectionMatrix();
+
+                // 更新orthographicCamera相机的辅助线
+                this.orthographicCameraHelper.update();
+
+                // 显示orthographicCamera相机的辅助线
+                this.orthographicCameraHelper.visible = true;
+
+                // 隐藏perspectiveCamera相机的辅助线
+                this.cameraHelper.visible = false;
+              }
+
+              // 设置相机的焦点始终为白色小球
+              this.cameraGroup.lookAt(this.whiteCircle.position);
+
+              // 告诉渲染器清除颜色、深度或模板缓存. 此方法将颜色缓存初始化为当前颜色。参数们默认都是true
+              renderer.clear();
+
+              // 隐藏当前显示的相机的辅助线-------------------------->
+              this.activeHelper.visible = false;
+
+              // 设置渲染器渲染的范围(页面一半的宽度,居左)
+              renderer.setViewport(0, 0, size.width / 2, size.height);
+
+              // 执行渲染(渲染当前默认相机的视图)
+              renderer.render(scene, this.activeCamera);
+
+              // 显示当前显示的相机的辅助线-------------------------->
+              this.activeHelper.visible = true;
+
+              // 设置渲染器渲染的范围(页面一半的宽度,居右)
+              renderer.setViewport(size.width / 2, 0, size.width / 2, size.height);
+
+              // 执行渲染(渲染上帝视角相机的视图,便于观察)
+              renderer.render(scene, camera);
+            }
+          });
+        }
+
+        // 本次demo实现初始化函数
+        initFn() {
+          // 解构获取
+          const { camera, renderer, controls, scene, width, height } = this.option;
+
+          // 禁用控制器
+          controls.enabled = false;
+
+          // 实例化GUI工具
+          this.gui = new GUI({ width: 310 });
+
+          // 创建当前修改相机gui文件夹
+          let changeCamera = this.gui.addFolder('changeCamera');
+
+          // gui配置
+          const settings = {
+            perspectiveCamera: () => {
+              // 设置全局默认相机
+              this.activeCamera = this.customCamera;
+
+              // 设置全局默认相机辅助对象
+              this.activeHelper = this.cameraHelper;
+            },
+            orthographicCamera: () => {
+              // 设置全局默认相机
+              this.activeCamera = this.orthographicCamera;
+
+              // 设置全局默认相机辅助对象
+              this.activeHelper = this.orthographicCameraHelper;
+            },
+          };
+
+          // 设置perspectiveCamera按钮,点击执行settings中的perspectiveCamera函数
+          changeCamera.add(settings, 'perspectiveCamera');
+
+          // 设置orthographicCamera按钮,点击执行settings中的orthographicCamera函数
+          changeCamera.add(settings, 'orthographicCamera');
+
+          // 获取像素比
+          let aspect = width / height;
+
+          // 设置颗粒大小
+          let frustumSize = 600;
+
+          // 定义渲染器是否在渲染每一帧之前自动清除其输出。
+          renderer.autoClear = false;
+
+          // 设置相机--------------------------------------------------------->
+
+          // 设置相机z轴位置
+          camera.position.set(0, 0, 2500);
+
+          // 创建一个相机对象,用来演示相机辅助线
+          this.customCamera = new THREE.PerspectiveCamera(50, 0.5 * aspect, 150, 1000);
+
+          // 创建相机辅助对象
+          this.cameraHelper = new THREE.CameraHelper(this.customCamera);
+
+          // 场景中添加相机辅助对象
+          scene.add(this.cameraHelper);
+
+          /**
+           * 创建正交相机,它使用orthographic projection(正交投影)来进行投影,在这种投影模式下,无论物体距离相机近或者远,在最终渲染的图片中物体的大小都保持不变,这对于渲染2D场景和UI元素作用很大
+           * @param {number} left 正交相机左侧面
+           * @param {number} right 正交相机右侧面
+           * @param {number} top 正交相机上侧面
+           * @param {number} bottom 正交相机下侧面
+           * @param {number} near 正交相机近端面
+           * @param {number} far 正交相机远端面
+           * 以上这些参数共同构成了摄像机的视椎体(viewing frustum)
+           */
+          this.orthographicCamera = new THREE.OrthographicCamera((0.5 * frustumSize * aspect) / -2, (0.5 * frustumSize * aspect) / 2, frustumSize / 2, frustumSize / -2, 150, 1000);
+
+          // 创建正交相机辅助对象
+          this.orthographicCameraHelper = new THREE.CameraHelper(this.orthographicCamera);
+
+          // 场景中添加正交相机辅助对象
+          scene.add(this.orthographicCameraHelper);
+
+          // 创建一个组,装载自定义相机和正交相机
+          this.cameraGroup = new THREE.Group();
+
+          // 添加自定义相机和正交相机
+          this.cameraGroup.add(this.customCamera, this.orthographicCamera);
+
+          // 将自定义的组添加到场景中,否则自定义相机和正交相机将会因为在group组中,而group组不在场景中导致项目不在场景中显示
+          scene.add(this.cameraGroup);
+
+          // 设置全局默认相机
+          this.activeCamera = this.customCamera;
+
+          // 设置全局默认相机辅助对象
+          this.activeHelper = this.cameraHelper;
+
+          // 设置正交相机角度
+          this.orthographicCamera.rotation.y = Math.PI;
+
+          // 设置相机角度
+          this.customCamera.rotation.y = Math.PI;
+
+          // 设置小球--------------------------------------------------------->
+          // 创建白色球体,wireframe表示渲染几何体的线框
+          this.whiteCircle = new THREE.Mesh(new THREE.SphereGeometry(100, 16, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }));
+
+          // 创建绿色球体
+          this.greenCircle = new THREE.Mesh(new THREE.SphereGeometry(50, 16, 8), new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true }));
+
+          this.greenCircle.position.y = 150;
+
+          // 创建蓝色球体
+          this.blueCircle = new THREE.Mesh(new THREE.SphereGeometry(5, 16, 8), new THREE.MeshBasicMaterial({ color: 0x0000ff, wireframe: true }));
+
+          this.blueCircle.position.z = 150;
+
+          // 绿色球体添加到白色球体中
+          this.whiteCircle.add(this.greenCircle);
+          // 白色球体添加到场景中
+          scene.add(this.whiteCircle);
+
+          // 蓝色球体添加到相机group中
+          this.cameraGroup.add(this.blueCircle);
+
+          // 设置点云--------------------------------------------------------->
+          // 创建缓冲区几何体
+          const geometry = new THREE.BufferGeometry();
+
+          // 创建承载顶点的数组
+          const vertices = [];
+
+          // 循环生成顶点坐标(xyz),添加到顶点数组中
+          for (let i = 0; i < 10000; i++) {
+            // 生成随机的顶点
+            vertices.push(THREE.MathUtils.randFloatSpread(2000)); // x
+            vertices.push(THREE.MathUtils.randFloatSpread(2000)); // y
+            vertices.push(THREE.MathUtils.randFloatSpread(2000)); // z
+          }
+
+          // 将顶点坐标设置为geomatry的自定义属性position,这里的new THREE.Float32BufferAttribute(vertices, 3)表示使用vertices数组,3表示每个顶点的数量为3(xyz)
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+
+          /**
+           * 创建点云对象
+           * @param {buffer} BufferGeometry threejs的BufferGeometry(缓冲几何体)
+           * @param {material} material 点云的材质
+           */
+          const particles = new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0x888888 }));
+
+          // 将点云添加到场景中
+          scene.add(particles);
+        }
+
+        // FPS实时展示
+        shwoFps() {
+          // 实例化FPS展示器
+          this.stats = new Stats();
+
+          // 将FPS展示器挂载到dom中
+          document.querySelector(this.option.root).appendChild(this.stats.dom);
+        }
+      }
+      const currentDemo = new CurrentDemo();
+    </script>
+  </body>
+</html>

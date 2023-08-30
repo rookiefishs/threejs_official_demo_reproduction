@@ -1,0 +1,553 @@
+<!--
+* @Author:WangZhiYu
+* @Date: 2023/07/10 19:41:18
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-08-21 10:20:01
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>02-webgl_animation_skinning_blending</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      // 导入initThree初始化模板
+      import { InitThree, THREE, GLTFLoader, DRACOLoader } from './initThree.js';
+      // 导入FPS帧率监控
+      import Stats from 'three/addons/libs/stats.module.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+      // 当前demo的实例化效果
+      class currentDemo extends InitThree {
+        constructor() {
+          // 实例化父类
+          super();
+
+          // 本次demo初始化操作
+          this.init();
+        }
+
+        // 显示FPS
+        showFPS() {
+          // 实例化FPS监控
+          const stats = new Stats();
+
+          // FPS添加到页面中
+          document.querySelector(this.option.root).appendChild(stats.dom);
+
+          // 返回FPS实例
+          return stats;
+        }
+
+        // 初始化操作
+        init() {
+          // 设置渲染器的输出编码为sRGB标准编码,用于确保在不同设备和平台上显示颜色时的一致性
+          this.option.renderer.outputEncoding = THREE.sRGBEncoding;
+
+          // 初始化动画速度
+          this.animationSpeed = 1;
+
+          // 开启渲染器渲染阴影
+          this.option.renderer.shadowMap.enabled = true;
+
+          // 设置相机位置
+          this.setCameraPosition(-1.5, 1, -3.2);
+
+          // 设置相机的目标点
+          this.option.camera.lookAt(0, 1, 0);
+
+          // 设置动画
+          this.mixer = null;
+
+          // 设置threjs的时钟
+          this.clock = new THREE.Clock();
+
+          // 调用显示帧率方法
+          const stats = this.showFPS();
+
+          // 禁用控制器
+          this.option.controls.enabled = false;
+
+          // 设置场景颜色
+          this.option.scene.background = new THREE.Color(0xa0a0a0);
+
+          /**
+           * 设置场景的雾
+           * new THREE.Fog(雾的颜色,雾的最小距离,雾的最大距离)
+           */
+          this.option.scene.fog = new THREE.Fog(0xa0a0a0, 10, 50);
+
+          /**
+           * 设置半球光
+           * THREE.HemisphereLight(keyColor,groundColor,intensity)
+           * @params {num} keyColor 天空发出光线的颜色,默认0xffffff 可选值
+           * @params {num} groundColor 地面发出光线的颜色,默认0xffffff 可选值
+           * @params {num} intensity 光照强度,默认1 可选
+           */
+          const light = new THREE.HemisphereLight(0xffffff, 0x444444);
+
+          // 设置光源的位置
+          light.position.set(0, 20, 0);
+
+          // 添加光源到场景中
+          this.option.scene.add(light);
+
+          /**
+           * 设置相机的目标点
+           * lookAt(x,y,z)
+           */
+          this.option.camera.lookAt(0, 1, 0);
+
+          // 添加平行光
+          const dirLight = new THREE.DirectionalLight(0xffffff);
+          dirLight.position.set(-3, 10, -10); // 设置平行光的位置
+          dirLight.castShadow = true; // 设置平行光会照射出阴影
+          dirLight.shadow.camera.top = 2; // 设置阴影相机的顶部裁剪面位置
+          dirLight.shadow.camera.bottom = -2; // 设置阴影相机的底部裁剪面位置
+          dirLight.shadow.camera.left = -2; // 设置阴影相机的左侧裁剪面位置
+          dirLight.shadow.camera.right = 2; // 设置阴影相机的右侧裁剪面位置
+          dirLight.shadow.camera.near = 0.1; // 设置阴影相机的近端裁剪面位置
+          dirLight.shadow.camera.far = 40; // 设置阴影相机的远端裁剪面位置
+
+          // 平行光添加到场景中
+          this.option.scene.add(dirLight);
+
+          /**
+           * 创建一个平面,并且这个平面物体90度倾斜铺在场景中,因为背景是浅灰色,这个平面是白色,就形成了上半部分为浅灰色,下半部分为淡白色(这里是因为设置全局的雾fog效果)的渐变背景
+           * @params {depthWrite} depthWrite表示渲染此材质是否对深度缓冲区有影响,默认为true
+           */
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: true }));
+
+          // 倾斜平面物体
+          mesh.rotation.x = -Math.PI / 2;
+
+          // 设置平面位置向下偏移
+          mesh.position.set(0, -0.5, 0);
+
+          // 设置物体接受阴影
+          mesh.receiveShadow = true;
+
+          // 物体添加到场景中
+          this.option.scene.add(mesh);
+
+          // 导入机器人模型
+          this.importmodel();
+
+          // 动画对应的权重
+          this.animationsWeight = {};
+
+          // 存放切换动画按钮GUI实例,便于设置这些按钮的禁用启用
+          this.crossFadeControls = [];
+
+          // 如果过stats实例就进行更新
+          this.render(() => {
+            // 如果FPS检测不为空就表示已经存在,在这里将其更新
+            stats && stats.update();
+
+            // 如果实例化了动画
+            if (this.mixer) {
+              // 获取时钟从创建到当前所使用的时间
+              let delta = this.clock.getDelta();
+
+              // 如果设置了设置步进值,就修改时间为步进值,通过控制步进值来控制动画的播放
+              if (this.setStepValue) {
+                delta = this.stepValue;
+
+                // 重置步进值
+                this.stepValue = 0.0;
+              }
+              // 根据时间差来控制动画的播放
+              this.mixer.update(delta);
+
+              // 实时更新动画权重占比
+              this.getCurrentAnimationWeight();
+
+              // 更新模型动画转化的GUI禁用启用
+              this.updateCrossFadeControls();
+            }
+          });
+        }
+
+        // 导入机器人模型
+        importmodel() {
+          this.initExample('./models/gltf/Soldier.glb', gltf => {
+            // glft表示通过GLTFLoader加载的模型数据,gltf.scene为gltf提取出来的场景对象
+            this.model = gltf.scene;
+
+            // 循环模型的每个零件,设置投射阴影
+            this.model.traverse(function (object) {
+              if (object.isMesh) object.castShadow = true;
+            });
+
+            // 设置模型位置
+            this.model.position.set(0, -0.5, 0);
+
+            // 根据模型实例化动画
+            this.mixer = new THREE.AnimationMixer(this.model);
+
+            // 保存动画到全局
+            this.animations = {
+              等: this.mixer.clipAction(gltf.animations[0]),
+              跑: this.mixer.clipAction(gltf.animations[1]),
+              停: this.mixer.clipAction(gltf.animations[2]),
+              走: this.mixer.clipAction(gltf.animations[3]),
+            };
+
+            // 当前播放的动画
+            this.currentAnimation = '走';
+
+            // 设置动画速度
+            this.mixer.timeScale = this.animationSpeed;
+
+            // 模型添加到页面中
+            this.option.scene.add(this.model);
+
+            // 添加GUI控制
+            this.addGUI();
+
+            // 按照设定好的动画权重播放动画
+            this.playAnimation();
+          });
+        }
+
+        // 根据当前设定好的动画参数播放动画
+        playAnimation() {
+          this.setWeight(this.animations['等'], this.settings['等待动画所占权重']);
+          this.setWeight(this.animations['跑'], this.settings['跑步动画所占权重']);
+          this.setWeight(this.animations['走'], this.settings['走路动画所占权重']);
+          this.setWeight(this.animations['停'], 0);
+
+          // 循环所有的动画并设置pause(暂停参数)为true
+          Object.keys(this.animations).forEach(item => {
+            this.animations[item].pause = true;
+            this.animations[item].play();
+          });
+        }
+
+        // 根据模型生成骨架
+        addSkeleton(model, visible) {
+          // 创建骨架实例
+          this.skeleton = new THREE.SkeletonHelper(model);
+
+          // 根据参数设置骨架是否显示
+          this.skeleton.visible = visible;
+
+          // 骨架添加到场景中
+          this.option.scene.add(this.skeleton);
+        }
+
+        // 更新GUI动画切换按钮的禁用启用
+        updateCrossFadeControls() {
+          if (this.animationsWeight['等'] === 1 && this.animationsWeight['走'] === 0 && this.animationsWeight['跑'] === 0) {
+            this.crossFadeControls[0].disable();
+            this.crossFadeControls[1].enable();
+            this.crossFadeControls[2].disable();
+            this.crossFadeControls[3].disable();
+          }
+
+          if (this.animationsWeight['等'] === 0 && this.animationsWeight['走'] === 1 && this.animationsWeight['跑'] === 0) {
+            this.crossFadeControls[0].enable();
+            this.crossFadeControls[1].disable();
+            this.crossFadeControls[2].enable();
+            this.crossFadeControls[3].disable();
+          }
+
+          if (this.animationsWeight['等'] === 0 && this.animationsWeight['走'] === 0 && this.animationsWeight['跑'] === 1) {
+            this.crossFadeControls[0].disable();
+            this.crossFadeControls[1].disable();
+            this.crossFadeControls[2].disable();
+            this.crossFadeControls[3].enable();
+          }
+        }
+
+        // 过渡切换模型运动状态
+        prepareCrossFade(startAction, endAction, defaultDuration) {
+          // 获取到最终的过渡时长(如果设置使用默认值就使用传入的默认值过渡,如果没有就使用GUI中指定的过渡值)
+          const duration = this.setCrossFadeDuration(defaultDuration);
+
+          this.setStepValue = false;
+
+          // 取消所有动画的暂停
+          this.isPauseAnimation(false);
+
+          // 如果是从起始状态是等待状态
+          if (startAction === this.animations['等']) {
+            // 设置动画的权重
+            this.setWeight(endAction, 1);
+
+            // 设置淡入的动作开始的时间节点
+            endAction.time = 0;
+
+            // 让一个动画淡出,同时让另一个动作淡入
+            startAction.crossFadeTo(endAction, duration, false);
+          } else {
+            // 给动画绑定事件,loop为单次循环的结束,finished为全部动作的结束
+            this.mixer.addEventListener('loop', onLoopFinished);
+
+            let that = this;
+
+            // loop事件函数
+            function onLoopFinished(event) {
+              // 如果执行的动画和当前切换的动画相同
+              if (event.action === startAction) {
+                // 销毁loop事件
+                that.mixer.removeEventListener('loop', onLoopFinished);
+
+                // 设置动画的权重
+                that.setWeight(endAction, 1);
+
+                // 动作开始的时间节点
+                endAction.time = 0;
+
+                // 让一个动画淡出,同时让另一个动作淡入
+                startAction.crossFadeTo(that.animations['跑'], duration, false);
+              }
+            }
+          }
+        }
+
+        // 获取切换运动状态所需的过渡时长
+        setCrossFadeDuration(defaultDuration) {
+          // 如果选中了使用默认值
+          if (this.settings['是否使用默认值']) {
+            return defaultDuration;
+          } else {
+            // 如果不使用默认值,指定过渡时间
+            return this.settings['指定过渡时长'];
+          }
+        }
+
+        // 设置权重
+        setWeight(action, weight) {
+          // 启用动作
+          action.enabled = true;
+
+          // 设置时间比例（播放速度timeScale）以及停用所有的变形
+          action.setEffectiveTimeScale(1);
+
+          // 设置权重（weight）以及停止所有淡入淡出
+          action.setEffectiveWeight(weight);
+        }
+
+        // 暂停/取消暂停所有动画
+        isPauseAnimation(isPause) {
+          // 循环所有的动画并设置pause(暂停参数)为isPause
+          Object.keys(this.animations).forEach(item => {
+            this.animations[item].paused = isPause;
+          });
+        }
+
+        // 获取当前动画的权重占比
+        getCurrentAnimationWeight() {
+          // 获取当前动画的权重getEffectiveWeight
+          this.animationsWeight['走'] = this.animations['走'].getEffectiveWeight();
+          this.animationsWeight['跑'] = this.animations['跑'].getEffectiveWeight();
+          this.animationsWeight['停'] = this.animations['停'].getEffectiveWeight();
+          this.animationsWeight['等'] = this.animations['等'].getEffectiveWeight();
+
+          if (!this.settings) return;
+          // 设置settings中的权重数据
+          this.settings['等待动画所占权重'] = this.animationsWeight['等'];
+          this.settings['走路动画所占权重'] = this.animationsWeight['走'];
+          this.settings['跑步动画所占权重'] = this.animationsWeight['跑'];
+        }
+
+        // 添加GUI控制
+        addGUI() {
+          // 实例化GUI
+          this.gui = new GUI({ width: 350 });
+
+          // 结束动画
+          const stop = () => {
+            this.animations[this.currentAnimation].stop();
+          };
+
+          // 开始动画
+          const start = () => {
+            this.animations[this.currentAnimation].play();
+          };
+
+          // 暂停动画
+          const pause = () => {
+            this.isPauseAnimation(true);
+          };
+
+          // 继续动画
+          const continueFn = () => {
+            // 设置步进标识变量,表示要修改步进值
+            this.setStepValue = false;
+
+            // 循环所有的动画并设置pause(暂停参数)为false
+            Object.keys(this.animations).forEach(item => {
+              this.animations[item].paused = false;
+            });
+          };
+
+          // 迈出一步
+          const takeADtep = value => {
+            // 继续所有动画
+            continueFn();
+
+            // 设置步进标识变量,表示要修改步进值
+            this.setStepValue = true;
+
+            // 设置步进值为全局变量
+            this.stepValue = settings['修改步长'];
+          };
+
+          // 从走到等状态
+          const fromWalkToIdle = () => this.prepareCrossFade(this.animations['走'], this.animations['等'], 1.0);
+
+          // 从等到走状态
+          const fromIdleToWalk = () => this.prepareCrossFade(this.animations['等'], this.animations['走'], 0.5);
+
+          // 从走到跑状态
+          const fromWalkToRun = () => this.prepareCrossFade(this.animations['走'], this.animations['跑'], 2.5);
+
+          // 从跑到走状态
+          const fromRunToWalk = () => this.prepareCrossFade(this.animations['跑'], this.animations['走'], 5.0);
+
+          // GUI控制的配置
+          let settings = {
+            是否可见: true,
+            是否显示骨架: false,
+            结束动画: stop,
+            开始动画: start,
+            暂停动画: pause,
+            继续动画: continueFn,
+            迈出一步: takeADtep,
+            修改步长: 0.05,
+            Y轴角度: -0.2,
+            模型大小: 1.5,
+            从走到等状态: fromWalkToIdle,
+            从等到走状态: fromIdleToWalk,
+            从走到跑状态: fromWalkToRun,
+            从跑到走状态: fromRunToWalk,
+            设置速度: this.animationSpeed,
+            是否使用默认值: true,
+            指定过渡时长: 3.5,
+            等待动画所占权重: 0.0,
+            走路动画所占权重: 1.5,
+            跑步动画所占权重: 0.0,
+          };
+
+          this.settings = settings;
+
+          // 控制模型骨架的显示
+          this.addSkeleton(this.model, settings['是否显示骨架']);
+
+          // 添加GUI的不同文件夹
+          const folder1 = this.gui.addFolder('显示');
+          const folder2 = this.gui.addFolder('开始/结束');
+          const folder3 = this.gui.addFolder('暂停/继续');
+          const folder4 = this.gui.addFolder('设置动作');
+          const folder6 = this.gui.addFolder('设置过渡');
+          const folder5 = this.gui.addFolder('设置速度');
+          const folder7 = this.gui.addFolder('模型 角度/位置');
+          const folder8 = this.gui.addFolder('修改动画权重');
+
+          // 控制模型是否可见
+          folder1.add(settings, '是否可见').onChange(isShow => {
+            this.model.visible = isShow;
+          });
+
+          // 控制模型骨架是否可见
+          folder1.add(settings, '是否显示骨架').onChange(isShow => {
+            this.skeleton.visible = isShow;
+          });
+
+          // 开始动画
+          folder2.add(settings, '开始动画');
+
+          // 结束动画
+          folder2.add(settings, '结束动画');
+
+          // 暂停动画
+          folder3.add(settings, '暂停动画');
+
+          // 继续动画
+          folder3.add(settings, '继续动画');
+
+          // 迈出一步
+          folder3.add(settings, '迈出一步');
+
+          // 修改步长(配置对象,配置对象对应的key值,最小值,最大值,步进值)
+          folder3.add(settings, '修改步长', 0.01, 0.1, 0.001);
+
+          // 从走到等状态
+          this.crossFadeControls.push(folder4.add(settings, '从走到等状态'));
+
+          // 从等到走状态
+          this.crossFadeControls.push(folder4.add(settings, '从等到走状态'));
+
+          // 从走到跑状态
+          this.crossFadeControls.push(folder4.add(settings, '从走到跑状态'));
+
+          // 从跑到走状态
+          this.crossFadeControls.push(folder4.add(settings, '从跑到走状态'));
+
+          // 设置速度
+          folder5.add(settings, '设置速度', 1, 10, 0.5).onChange(speed => {
+            this.mixer.timeScale = speed;
+          });
+
+          // 设置是否使用默认值过渡
+          folder6.add(settings, '是否使用默认值');
+
+          // 指定过渡时长
+          folder6.add(settings, '指定过渡时长', 0, 10, 0.01);
+
+          // 控制模型的y角度
+          folder7.add(settings, 'Y轴角度', -Math.PI, Math.PI, 0.1).onChange(value => {
+            this.model.rotation['y'] = value;
+          });
+
+          // 控制模型的大小
+          folder7.add(settings, '模型大小', -Math.PI, Math.PI, 0.1).onChange(value => {
+            this.model.scale.set(value, value, value);
+          });
+
+          // 等待动画所占权重(listen可以监听用户更改对应的值,也会触发后续的onChange函数)
+          folder8
+            .add(settings, '等待动画所占权重', 0.0, 1.5, 0.01)
+            .listen()
+            .onChange(weight => {
+              this.setWeight(this.animations['等'], weight);
+            });
+
+          // 走路动画所占权重
+          folder8
+            .add(settings, '走路动画所占权重', 0.0, 1.5, 0.01)
+            .listen()
+            .onChange(weight => {
+              this.setWeight(this.animations['走'], weight);
+            });
+
+          // 跑步动画所占权重
+          folder8
+            .add(settings, '跑步动画所占权重', 0.0, 1.5, 0.01)
+            .listen()
+            .onChange(weight => {
+              this.setWeight(this.animations['跑'], weight);
+            });
+        }
+      }
+
+      // 实例化当前demo的构造函数,得到整体效果
+      const initThree = new currentDemo();
+    </script>
+  </body>
+</html>

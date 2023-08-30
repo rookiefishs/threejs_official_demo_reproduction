@@ -1,0 +1,143 @@
+<!--
+* @Author:WangZhiYu
+* @Date: 2023/07/06 19:09:10
+* @LastEditors: WangZhiYu
+* @LastEditTime: 2023/07/06 19:09:10
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>01-webgl_animation_keyframes</title>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- 定义导入的内容的路径 -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      // 初始化threejs模板
+      import { InitThree, THREE } from './initThree.js';
+
+      // 导入threejs的帧率监控
+      import Stats from 'three/addons/libs/stats.module.js';
+
+      // 导入threejs中自带的环境贴图
+      import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+      // 本次demo的实例
+      class CurrentDemo extends InitThree {
+        constructor() {
+          /**
+           * 调用父类的构造函数,并且传递参数
+           * 等同于:
+           * new InitThree({ initFn() {
+              this.option.renderer.setClearColor("#bfe3dd")
+            }})
+           */
+          super({
+            initFn() {
+              // 设置渲染器颜色
+              this.option.renderer.setClearColor('#bfe3dd');
+
+              // 禁止控制器平移
+              this.option.controls.enablePan = false;
+
+              // 设置渲染器的输出编码为sRGB标准编码,用于确保在不同设备和平台上显示颜色时的一致性
+              this.option.renderer.outputEncoding = THREE.sRGBEncoding;
+            },
+          });
+
+          // 开始渲染
+          // this.render()
+
+          // 导入模型
+          this.importmodel();
+
+          // 设置场景贴图
+          this.addSceneTexture();
+
+          // 开启显示更新FPS功能
+          this.stats = this.showFPS();
+
+          // 创建threejs的时钟
+          this.clock = new THREE.Clock();
+
+          // 创建动画混合器
+          this.mixer = null;
+
+          // 渲染threejs
+          this.render(() => {
+            // 更新fps
+            this.stats.update();
+
+            // 如果已经创建了动画混合器,就指向下面的代码,下面的代码主要用于更新动画
+            if (this.mixer) {
+              // 获取时钟从开始到现在的时间差
+              const delta = this.clock.getDelta();
+
+              // 更新动画,他会根据时间差来动态的控制当前动画的播放
+              this.mixer.update(delta);
+            }
+          });
+        }
+
+        // 导入threejs模型方法
+        importmodel() {
+          this.initExample(
+            './models/gltf/LittlestTokyo.glb',
+            model => {
+              model.scene.scale.set(0.01, 0.01, 0.01);
+              this.option.scene.add(model.scene);
+
+              // 使用动画混合器,需要传递播放动画的模型所属的对象
+              this.mixer = new THREE.AnimationMixer(model.scene);
+
+              // 播放动画,首先使用this.mixer.clipAction(model.animations[0])将动画与模型关联起来,然后使用.play方法播放动画,这里注意要在render函数中不停的更新mixer
+              this.mixer.clipAction(model.animations[0]).play();
+            },
+            progress => {
+              console.log(progress, 'progress');
+              console.log('进度:' + progress.loaded / progress.total);
+            },
+            error => {
+              console.log(error, 'error');
+            }
+          );
+        }
+
+        // 设置场景贴图
+        addSceneTexture() {
+          // 实例化threejs自动计算(预处理)环境贴图工具,需要传递一个webGlRenderer对象,API地址:https://localhost:8080/docs/index.html#api/zh/extras/PMREMGenerator
+          const pmremGenerator = new THREE.PMREMGenerator(this.option.renderer);
+          /**
+           * 使用pmremGenerator的formScene方法来动态计算当前场景的环境贴图
+           * @params {scene} 场景,这里直接使用RoomEnvironment模拟的场景
+           * @params {sigma} 用于场景的模糊半径,可选参数,默认值0.1
+           */
+          this.option.scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+        }
+
+        // 动态显示帧率
+        showFPS() {
+          let stats = new Stats();
+          document.querySelector(this.option.root).appendChild(stats.dom);
+          return stats;
+        }
+      }
+
+      // 实例化demo,展示demo效果
+      let currentDemo = new CurrentDemo();
+    </script>
+  </body>
+</html>

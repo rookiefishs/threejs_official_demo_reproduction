@@ -1,0 +1,279 @@
+<!--
+* @Author:WangZhiYu
+* @Date: 2023/07/10 19:41:18
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-08-24 10:44:49
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="./public/favicon.ico" />
+    <link rel="stylesheet" href="./base.css" />
+    <title>template</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+    <script type="module">
+      import Stats from 'three/addons/libs/stats.module.js';
+      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+      // 初始化threejs模板
+      import { InitThree, THREE } from './initThree.js';
+      class CurrentDemo extends InitThree {
+        constructor() {
+          // 实例化父类
+          super({
+            camera: new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.25, 100),
+          });
+
+          // 展示实时FPS
+          this.showFPS();
+
+          // 初始化操作
+          this.init();
+
+          // 加载模型
+          this.importmodel();
+
+          // 执行渲染器
+          this.render(() => {
+            // 如果stats存在就进行更新
+            if (this.stats) {
+              this.stats.update();
+            }
+
+            if (this.mixer) {
+              // 获取时钟创建到现在的时间
+              let delta = this.clock.getDelta();
+
+              // 更新动画剪辑器
+              this.mixer && this.mixer.update(delta);
+            }
+          });
+        }
+
+        // 初始化操作
+        init() {
+          let { camera, scene, renderer, controls } = this.option;
+
+          // 禁用控制器
+          controls.enabled = false;
+
+          // 创建GUI
+          this.gui = new GUI({ width: 310, title: 'webgl_animation_skinning_morph' });
+
+          // 全局GUI参数
+          this.settings = {};
+
+          // 创建时钟
+          this.clock = new THREE.Clock();
+
+          // 设置渲染器的输出格式(在不同平台以相同的输出展示)
+          renderer.outputEncoding = THREE.sRGBEncoding;
+
+          scene.background = new THREE.Color(0xe0e0e0);
+          scene.position.set(0, -2, 0);
+
+          // 设置相机位置
+          camera.position.set(-5, 3, 10);
+
+          // 设置相机焦点
+          camera.lookAt(0, 2, 0);
+
+          /**
+           * 场景中应用雾效果
+           * @param {16进制} color 雾的颜色
+           * @param {number} minnumber 应用雾的最小距离
+           * @param {number} maxnumber 应用雾的最大距离
+           */
+          scene.fog = new THREE.Fog(0xe0e0e0, 20, 100);
+
+          /**
+           * 设置半球光(从地面到天空的颜色)
+           * @param {color} 天空颜色
+           * @param {color} 地面颜色
+           */
+          const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444);
+          hemiLight.position.set(0, 20, 0);
+          scene.add(hemiLight);
+
+          /**
+           * 设置平行光
+           * @param {color} 平行光的颜色
+           */
+          const dirLight = new THREE.DirectionalLight(0xffffff);
+          dirLight.position.set(0, 20, 10);
+          scene.add(dirLight);
+
+          // 创建场景的底部地板
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false }));
+
+          // 旋转底部地板,使其平铺在底部
+          mesh.rotation.x = -Math.PI / 2;
+          scene.add(mesh);
+
+          // 场景添加网格辅助对象
+          const grid = new THREE.GridHelper(200, 40, 0x000000, 0x000000);
+
+          // 设置网格的透明度
+          grid.material.opacity = 0.2;
+
+          // 设置网格允许透明
+          grid.material.transparent = true;
+          scene.add(grid);
+        }
+
+        // 加载模型
+        importmodel() {
+          this.initExample(
+            './models/gltf/RobotExpressive/RobotExpressive.glb',
+            model => {
+              this.model = model;
+
+              this.option.scene.add(model.scene);
+              // 添加GUI控制
+              this.addGUIControl();
+            },
+            progress => {
+              console.log(progress, 'progress');
+              console.log('进度:' + progress.loaded / progress.total);
+            },
+            error => {
+              console.log(error, 'error');
+            }
+          );
+        }
+
+        // 添加FPS展示
+        showFPS() {
+          this.stats = new Stats();
+          document.querySelector(this.option.root).appendChild(this.stats.dom);
+        }
+
+        // 添加GUI控制
+        addGUIControl() {
+          this.states = ['Idle', 'Walking', 'Running', 'Dance', 'Death', 'Sitting', 'Standing'];
+          this.emotes = ['Jump', 'Yes', 'No', 'Wave', 'Punch', 'ThumbsUp'];
+
+          // 创建动画混合器
+          this.mixer = new THREE.AnimationMixer(this.model.scene);
+
+          // 使用动画混合器创建剪辑实例并保存模型的动画到全局变量中
+          this.animations = this.model.animations.map(item => this.mixer.clipAction(item));
+
+          // 迭代剪辑实例,设置属性
+          this.animations = this.animations.map(item => {
+            // 添加name
+            item.name = item._clip.name;
+
+            // 对不同的动画设置不同的动画执行次数
+            if (this.emotes.indexOf(item.name) >= 0 || this.states.indexOf(item.name) >= 4) {
+              // 设置所有的动画在执行到最后一帧后自动暂停
+              item.clampWhenFinished = true;
+              // 设置所有动画只执行一次
+              item.loop = THREE.LoopOnce;
+            }
+
+            return item;
+          });
+
+          // 创建gui 文件夹states
+          const states = this.gui.addFolder('States');
+
+          // 设置state的默认值为walking
+          this.settings = { ...this.settings, state: 'Walking' };
+
+          // 设置当前动画为walking
+          this.activeAction = this.animations.find(item => item.name === 'Walking');
+
+          // 播放默认动画
+          this.activeAction.play();
+
+          // 添加gui的states文件夹的内容,option选项为各个动画的名称,并且监听修改,修改后自动触发onChange函数
+          states
+            .add(this.settings, 'state')
+            .options(this.states)
+            .onChange(value => {
+              // 执行切换动画
+              this.checkAnimation(value, 0.5);
+            });
+
+          // 创建gui 文件夹emotes
+          const emotes = this.gui.addFolder('Emotes');
+
+          // 遍历添加emotes按钮
+          this.emotes.forEach(item => {
+            // 按钮处理函数
+            this.settings[item] = () => {
+              // 执行切换动画(切换到点击的按钮的动画)
+              this.checkAnimation(item, 0.2);
+
+              // 绑定动画结束函数
+              this.mixer.addEventListener('finished', restoreState);
+            };
+
+            emotes.add(this.settings, item);
+          });
+
+          // 保存this,避免this丢失
+          let _that = this;
+
+          // 动画结束回调
+          function restoreState() {
+            // 移除事件
+            _that.mixer.removeEventListener('finished', restoreState);
+
+            // 继续执行动画
+            _that.checkAnimation(_that.settings.state, 0.2);
+          }
+
+          // GUI控制表情
+          const expressionFolder = this.gui.addFolder('Expressions');
+
+          // 从场景中获取名称为Head_4的对象
+          let face = this.model.scene.getObjectByName('Head_4');
+
+          // 获取所有可控制的表情(可用形变目标)
+          const expressions = Object.keys(face.morphTargetDictionary);
+
+          // 循环表情,添加GUI控制,这里的表情是一个数组[0,0,0],并且gui的命名也为012,通过后续的.name重新设置名称,然后修改时会直接修改数组的索引为012的表情,从而实现控制
+          for (let i = 0; i < expressions.length; i++) {
+            expressionFolder.add(face.morphTargetInfluences, i, 0, 1, 0.01).name(expressions[i]);
+          }
+        }
+
+        /**
+         * 切换动画播放
+         * @param {string} name 动画名称
+         */
+        checkAnimation(name, duration) {
+          // 默认动画
+          let playAnimation = this.activeAction;
+
+          // 当前切换动画
+          this.activeAction = this.animations.find(item => item.name === name);
+
+          // 如果切换动画和默认动画相同则执行
+          if (this.activeAction !== playAnimation) {
+            // 将默认动画淡出(逐渐消失)
+            playAnimation.fadeOut(duration);
+          }
+
+          // 重置动画->设置时间比例->设置权重->淡入动画->播放动画
+          this.activeAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(duration).play();
+        }
+      }
+      const currentDemo = new CurrentDemo();
+    </script>
+  </body>
+</html>
