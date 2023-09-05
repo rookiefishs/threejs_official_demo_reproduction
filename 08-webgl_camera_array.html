@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-08-31 15:50:52
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-05 11:00:44
+ * @LastEditTime: 2023-09-05 15:53:05
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -30,49 +30,113 @@
     import { InitThree, THREE } from './initThree.js';
     class CurrentDemo extends InitThree {
       constructor() {
-        super();
+        super({
+          resizeCallback: that => {
+            // 结构获取参数
+            const { scene, renderer, width, height } = that.option;
 
+            // 获取实时更新的宽高
+            let size = that.option.isWindowSize ? { width: window.innerWidth, height: window.innerHeight } : { width: that.option.width, height: window.innerHeight };
+
+            // 获取宽高比
+            let aspect = size.width / size.height;
+
+            // 获取每个块的宽高
+            let blockWidth = (size.width / that.row) * window.devicePixelRatio;
+            let blockHeight = (size.height / that.col) * window.devicePixelRatio;
+
+            // 创建相机列表
+            that.cameras = [];
+
+            // 双重for循环生成块
+            for (let i = 0; i < that.row; i++) {
+              for (let j = 0; j < that.col; j++) {
+                // 创建相机
+                const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 10);
+
+                // 设置视口位置与大小
+                camera.viewport = new THREE.Vector4(Math.floor(i * blockWidth), Math.floor(j * blockHeight), Math.ceil(blockWidth), Math.ceil(blockHeight));
+
+                // 设置相机x位置
+                camera.position.x = i / that.row - 0.5;
+                // 设置相机y位置
+                camera.position.y = 0.5 - j / that.col;
+                // 设置相机z位置
+                camera.position.z = 1.5;
+
+                // 设置相机坐标乘以2,用于在页面宽高改变,camera视口宽高改变时保证一定的缩放效果
+                camera.position.multiplyScalar(2)
+                // 设置相机焦点
+                camera.lookAt(0, 0, 0);
+
+                // 更新相机
+                camera.updateMatrixWorld();
+
+                that.cameras.push(camera);
+              }
+            }
+
+            // 创建数组相机,摄像机阵列
+            const camera = new THREE.ArrayCamera(that.cameras);
+
+            // 更新全局camera为摄像机阵列
+            that.option.camera = camera;
+
+            // 设置渲染器尺寸
+            renderer.setSize(size.width, size.height);
+            // 更新相机宽高比
+            camera.aspect = size.width / size.height;
+
+            // 更新相机投影矩阵
+            camera.updateProjectionMatrix();
+          }
+        });
+
+        // 初始化函数
         this.initFn();
 
+        // 执行渲染器
         this.render(() => {
           // 更新圆柱体的角度
-          this.mesh.rotation.x += 0.005;
-          this.mesh.rotation.z += 0.01;
+          this.mesh.rotation.x += 0.1;
+          this.mesh.rotation.z += 0.05;
         });
       }
 
       initFn() {
         const { scene, renderer, controls, width, height } = this.option;
 
-        // controls.enabled = false;
+        // 禁用控制器
+        controls.enabled = false;
 
         // 渲染器开启阴影
         renderer.shadowMap.enabled = true;
 
         // 每行/列划分的块数
-        this.amount = 6;
+        this.row = 10;
+        this.col = 10;
 
         // 获取宽高比
         let aspect = width / height;
 
         // 获取每个块的宽高
-        let blockWidth = (width / this.amount) * window.devicePixelRatio;
-        let blockHeight = (height / this.amount) * window.devicePixelRatio;
+        let blockWidth = (width / this.row) * window.devicePixelRatio;
+        let blockHeight = (height / this.col) * window.devicePixelRatio;
 
         // 创建相机列表
         this.cameras = [];
 
         // 双重for循环生成块
-        for (let i = 0; i < this.amount; i++) {
-          for (let j = 0; j < this.amount; j++) {
+        for (let i = 0; i < this.row; i++) {
+          for (let j = 0; j < this.col; j++) {
             // 创建相机
             const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 10);
 
             // 定义相机的视口位置与大小
             camera.viewport = new THREE.Vector4(Math.floor(i * blockWidth), Math.floor(j * blockHeight), Math.ceil(blockWidth), Math.ceil(blockHeight));
 
-            camera.position.x = i / this.amount - 0.5;
-            camera.position.y = 0.5 - j / this.amount;
+            camera.position.x = i / this.row - 0.5;
+            camera.position.y = 0.5 - j / this.col;
             camera.position.z = 1.5;
             camera.position.multiplyScalar(2);
             camera.lookAt(0, 0, 0);
@@ -147,13 +211,10 @@
 
         // 圆柱体添加到场景中
         scene.add(this.mesh);
-
-        const helper = new THREE.AxesHelper(5)
-        scene.add(helper)
-                                                                                                                              }
-                                                                                                                            }
-                                                                                                                            const currentDemo = new CurrentDemo();
-                                                                                                                          </script>
+              }
+            }
+            const currentDemo = new CurrentDemo();
+          </script>
 </body>
 
 </html>
