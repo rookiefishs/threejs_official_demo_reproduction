@@ -2,20 +2,22 @@
  * @Author: wangzhiyu
  * @Date: 2023-08-31 15:50:52
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-04 19:42:09
+ * @LastEditTime: 2023-09-05 11:00:44
 -->
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="shortcut icon" href="./public/favicon.ico" />
-    <link rel="stylesheet" href="./base.css" />
-    <title>template</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="importmap">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./public/favicon.ico" />
+  <link rel="stylesheet" href="./base.css" />
+  <title>template</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="importmap">
       {
         "imports": {
           "three": "./threeSource/three.module.js",
@@ -23,131 +25,135 @@
         }
       }
     </script>
-    <script type="module">
-      // 初始化threejs模板
-      import { InitThree, THREE } from './initThree.js';
-      class CurrentDemo extends InitThree {
-        constructor() {
-          super();
+  <script type="module">
+    // 初始化threejs模板
+    import { InitThree, THREE } from './initThree.js';
+    class CurrentDemo extends InitThree {
+      constructor() {
+        super();
 
-          this.initFn();
+        this.initFn();
 
-          this.render(() => {
-            // 更新圆柱体的角度
-            this.mesh.rotation.x += 0.005;
-            this.mesh.rotation.z += 0.01;
-          });
-        }
-
-        initFn() {
-          const { scene, renderer, controls } = this.option;
-
-          controls.enabled = false;
-
-          // 渲染器开启阴影
-          renderer.shadowMap.enabled = true;
-
-          // 每行/列划分的块数
-          this.amount = 6;
-
-          // 获取宽高比
-          let aspect = this.option.width / this.option.height;
-
-          // 获取每个块的宽高
-          let width = (this.option.width / this.amount) * window.devicePixelRatio;
-          let height = (this.option.height / this.amount) * window.devicePixelRatio;
-
-          // 创建相机列表
-          this.cameras = [];
-
-          // 双重for循环生成块
-          for (let i = 0; i < this.amount; i++) {
-            for (let j = 0; j < this.amount; j++) {
-              // 创建相机
-              const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 10);
-
-              // 定义相机的视口位置与大小
-              camera.viewport = new THREE.Vector4(Math.floor(i * width), Math.floor(j * height), Math.ceil(width), Math.ceil(height));
-
-              camera.position.x = i / this.amount - 0.5;
-              camera.position.y = 0.5 - j / this.amount;
-              camera.position.z = 1.5;
-              camera.position.multiplyScalar(2);
-              camera.lookAt(0, 0, 0);
-              camera.updateMatrixWorld();
-
-              this.cameras.push(camera);
-            }
-          }
-
-          // 创建数组相机,摄像机阵列
-          const camera = new THREE.ArrayCamera(this.cameras);
-
-          // 更新全局camera为摄像机阵列
-          this.option.camera = camera;
-
-          // 添加环境光
-          scene.add(new THREE.AmbientLight(0x222244));
-
-          // 添加平行光
-          const light = new THREE.DirectionalLight();
-
-          // 设置平行光的位置
-          light.position.set(0.5, 0.5, 1);
-
-          // 设置平行光投射阴影
-          light.castShadow = true;
-
-          // 设置阴影映射的缩放级别
-          light.shadow.camera.zoom = 4; // tighter shadow map
-
-          // 将平行光添加到场景中
-          scene.add(light);
-
-          // 设置背景板
-          // 设置平面立方体
-          const geometryBackground = new THREE.PlaneGeometry(100, 100);
-
-          // 设置紫色材质
-          const materialBackground = new THREE.MeshPhongMaterial({
-            color: 0x000066,
-          });
-
-          // 创建背景板
-          const background = new THREE.Mesh(geometryBackground, materialBackground);
-
-          // 设置背景板反射阴影
-          background.receiveShadow = true;
-
-          // 设置背景板位置
-          background.position.set(0, 0, -1);
-
-          // 背景板添加到场景中
-          scene.add(background);
-
-          // 设置圆柱体
-          // 创建圆柱体
-          const geometryCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-
-          // 设置红色材质
-          const materialCylinder = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-          });
-
-          // 创建圆柱体
-          this.mesh = new THREE.Mesh(geometryCylinder, materialCylinder);
-
-          // 设置圆柱体投射阴影
-          this.mesh.castShadow = true;
-
-          // 设置圆柱体接收阴影
-          this.mesh.receiveShadow = true;
-
-          // 圆柱体添加到场景中
-          scene.add(this.mesh);
-        }
+        this.render(() => {
+          // 更新圆柱体的角度
+          this.mesh.rotation.x += 0.005;
+          this.mesh.rotation.z += 0.01;
+        });
       }
-      const currentDemo = new CurrentDemo();
-    </script>
-  </body>
+
+      initFn() {
+        const { scene, renderer, controls, width, height } = this.option;
+
+        // controls.enabled = false;
+
+        // 渲染器开启阴影
+        renderer.shadowMap.enabled = true;
+
+        // 每行/列划分的块数
+        this.amount = 6;
+
+        // 获取宽高比
+        let aspect = width / height;
+
+        // 获取每个块的宽高
+        let blockWidth = (width / this.amount) * window.devicePixelRatio;
+        let blockHeight = (height / this.amount) * window.devicePixelRatio;
+
+        // 创建相机列表
+        this.cameras = [];
+
+        // 双重for循环生成块
+        for (let i = 0; i < this.amount; i++) {
+          for (let j = 0; j < this.amount; j++) {
+            // 创建相机
+            const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 10);
+
+            // 定义相机的视口位置与大小
+            camera.viewport = new THREE.Vector4(Math.floor(i * blockWidth), Math.floor(j * blockHeight), Math.ceil(blockWidth), Math.ceil(blockHeight));
+
+            camera.position.x = i / this.amount - 0.5;
+            camera.position.y = 0.5 - j / this.amount;
+            camera.position.z = 1.5;
+            camera.position.multiplyScalar(2);
+            camera.lookAt(0, 0, 0);
+            camera.updateMatrixWorld();
+
+            this.cameras.push(camera);
+          }
+        }
+
+        // 创建数组相机,摄像机阵列
+        const camera = new THREE.ArrayCamera(this.cameras);
+
+        // 更新全局camera为摄像机阵列
+        this.option.camera = camera;
+
+        // 添加环境光
+        scene.add(new THREE.AmbientLight(0x222244));
+
+        // 添加平行光
+        const light = new THREE.DirectionalLight();
+
+        // 设置平行光的位置
+        light.position.set(0.5, 0.5, 1);
+
+        // 设置平行光投射阴影
+        light.castShadow = true;
+
+        // 设置阴影映射的缩放级别
+        light.shadow.camera.zoom = 4; // tighter shadow map
+
+        // 将平行光添加到场景中
+        scene.add(light);
+
+        // 设置背景板
+        // 设置平面立方体
+        const geometryBackground = new THREE.PlaneGeometry(100, 100);
+
+        // 设置紫色材质
+        const materialBackground = new THREE.MeshPhongMaterial({
+          color: 0x000066,
+        });
+
+        // 创建背景板
+        const background = new THREE.Mesh(geometryBackground, materialBackground);
+
+        // 设置背景板反射阴影
+        background.receiveShadow = true;
+
+        // 设置背景板位置
+        background.position.set(0, 0, -1);
+
+        // 背景板添加到场景中
+        scene.add(background);
+
+        // 设置圆柱体
+        // 创建圆柱体
+        const geometryCylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
+
+        // 设置红色材质
+        const materialCylinder = new THREE.MeshPhongMaterial({
+          color: 0xff0000,
+        });
+
+        // 创建圆柱体
+        this.mesh = new THREE.Mesh(geometryCylinder, materialCylinder);
+
+        // 设置圆柱体投射阴影
+        this.mesh.castShadow = true;
+
+        // 设置圆柱体接收阴影
+        this.mesh.receiveShadow = true;
+
+        // 圆柱体添加到场景中
+        scene.add(this.mesh);
+
+        const helper = new THREE.AxesHelper(5)
+        scene.add(helper)
+                                                                                                                              }
+                                                                                                                            }
+                                                                                                                            const currentDemo = new CurrentDemo();
+                                                                                                                          </script>
+</body>
+
 </html>
