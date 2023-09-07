@@ -1,0 +1,48 @@
+<!--
+ * @Author: wangzhiyu
+ * @Date: 2023-09-07 19:45:54
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-09-07 19:46:27
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./public/favicon.ico" />
+  <link rel="stylesheet" href="./base.css" />
+  <title>template</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+  <script type="module">
+    // 初始化threejs模板
+    import { InitThree, THREE } from './initThree.js';
+    class CurrentDemo extends InitThree {
+      constructor() {
+        super();
+
+        // 本次demo初始化步骤
+        this.initFn()
+
+        this.render();
+      }
+
+      initFn() {
+      }
+    }
+    const currentDemo = new CurrentDemo();
+  </script>
+</body>
+
+</html>
