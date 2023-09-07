@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-05 15:53:47
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-05 19:17:10
+ * @LastEditTime: 2023-09-07 14:22:02
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -28,6 +28,17 @@
   <script type="module">
     // 初始化threejs模板
     import { InitThree, THREE } from './initThree.js';
+
+  // 导入threejs的相机(透视相机的拓展相机,拥有更强大的功能)
+  // 自动平滑过渡：CinematicCamera内置了自动平滑过渡的功能，可以使相机在动画过程中产生平缓的移动效果。
+  // 追踪目标：可以设置相机跟随并追踪特定的目标对象，从而实现类似跟踪镜头的效果。
+  // 注重焦点：当相机移动时，CinematicCamera可以自动调整焦点位置，以保持目标对象处于焦点中心。
+  // 延迟跟踪：可以设置延迟跟踪，使相机在目标对象移动后稍有延迟地追踪，以产生更加流畅自然的效果。
+  // 多种参数控制：CinematicCamera具有多个可调节的参数，如追踪速度、延迟时间等，可以根据需要进行调整。
+  import { CinematicCamera } from 'three/addons/cameras/CinematicCamera.js';
+  import Stats from 'three/addons/libs/stats.module.js';
+  import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
     class CurrentDemo extends InitThree {
       constructor() {
         super();
@@ -35,11 +46,255 @@
         // 初始化
         this.initFn()
 
-        this.render();
+        // 显示FPS
+        this.showFPS()
+
+        // 鼠标移动查找鼠标上的对应元素
+        this.mouseMove()
+
+        // 设置相机配置与GUI
+        this.setCameraParams()
+
+        this.render(() => {
+          // 解构参数
+          let { stats, option: { camera, scene, renderer }, radius, raycaster, pointer } = this
+
+          // 如果存在实时帧率stats,就调用update实时更新
+          stats && stats.update()
+
+          // 更新相机位置
+          this.theta += 0.1
+
+          // THREE.MathUtils.degToRad(this.theta)将数值转换为弧度值
+          // Math.sin(THREE.MathUtils.degToRad(this.theta) Math.cos(THREE.MathUtils.degToRad(this.theta))获取弧度值的正弦值与余弦值
+          camera.position.x = radius * Math.sin(THREE.MathUtils.degToRad(this.theta))
+          camera.position.y = radius * Math.sin(THREE.MathUtils.degToRad(this.theta))
+          camera.position.z = radius * Math.cos(THREE.MathUtils.degToRad(this.theta))
+
+          // 设置相机聚焦
+          camera.lookAt(scene.position)
+
+          // 更新相机配置
+          camera.updateMatrixWorld();
+
+          if (raycaster) {
+            // 通过摄像机与鼠标实时位置更新光线投射
+            raycaster.setFromCamera(pointer, camera)
+
+            // 计算物体和射线的焦点(会返回一个数组,数组中就是当前鼠标移动过的物体的数据)
+            const intersects = raycaster.intersectObjects(scene.children);
+
+            if (intersects.length !== 0) {
+              // 获取鼠标聚焦的第一个物体的焦距
+              const distance = intersects[0].distance
+
+              // 设置相机的焦距(只适用于CinematicCamera相机)
+              camera.focusAt(distance)
+
+              // 判断是否存储了当前鼠标悬停的物体或者当前存储的物体是否为当前鼠标悬停的物体
+              if (this.currentObj !== intersects[0].object) {
+                // 将当前鼠标悬停的物体的颜色设置为设置当前存储的变量的颜色
+                if (this.currentObj) {
+                  this.currentObj.material.emissive.setHex(this.currentObj.currentHex)
+                }
+                // 如果没有存储此物体就设置颜色,同时将此物体存储到本地变量中
+                this.currentObj = intersects[0].object
+
+                // 保存物体原先的颜色
+                this.currentObj.currentHex = this.currentObj.material.emissive.getHex();
+
+                // 设置颜色
+                this.currentObj.material.emissive.setHex(0xff0000)
+
+              }
+            } else {
+              // 如果鼠标没有悬停到任何的物体上,设置当前存储的物体的颜色为原先的颜色
+              if (this.currentObj) {
+                this.currentObj.material.emissive.setHex(this.currentObj.currentHex)
+              }
+
+              this.currentObj = null
+            }
+
+            // 判断camera是否启用了postprocessing,如果启用了,就使用renderCinematic方法来代替renderer
+            if (camera.postprocessing.enabled) {
+              camera.renderCinematic(scene, renderer)
+            } else {
+              // 设置场景中物体的默认材质
+              scene.overrideMaterial = null;
+
+              // 清除渲染器缓存
+              renderer.clear();
+
+              // 渲染器执行渲染
+              renderer.render(scene, camera);
+            }
+          }
+        });
       }
 
+      // 本次demo初始化
       initFn() {
+        const { scene, renderer } = this.option
 
+        // 创建更新标识
+        this.theta = 0
+
+        // 创建相机移动半径
+        this.radius = 100
+
+        // 实例化GUI
+        this.gui = new GUI({ width: 250 })
+
+        // 设置场景背景颜色
+        scene.background = new THREE.Color('#fff')
+
+        // 添加环境光(均匀的照亮场景,不会投射阴影)
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+        // 创建平行光
+        const light = new THREE.DirectionalLight(0xffffff, 0.35);
+
+        // 设置平行光位置,这里使用normalize进行归一化,方便后续的光照计算
+        light.position.set(1, 1, 1).normalize();
+        scene.add(light);
+
+        // 创建透视相机的拓展相机
+        const cinematicCamera = new CinematicCamera(60, window.innerWidth / window.innerHeight, 1, 1000)
+
+        // 设置拓展相机位置
+        cinematicCamera.position.set(2, 1, 500);
+
+        // 设置拓展相机的焦距
+        cinematicCamera.setLens(5)
+
+        // 替换默认相机为透视相机的拓展相机
+        this.option.camera = cinematicCamera
+
+        // 循环创建盒子几何体
+        const box = new THREE.BoxGeometry(20, 20, 20);
+
+        for (let i = 0; i < 3000; i++) {
+          // 使用Lambert网格材质,类似于未经过处理的木材或者石材的材质
+          const lambert = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+
+          // 通过几何体与材质创建物体
+          const boxMesh = new THREE.Mesh(box, lambert);
+
+          // 设置物体的位置随机
+          boxMesh.position.x = Math.random() * 800 - 400
+          boxMesh.position.y = Math.random() * 800 - 400
+          boxMesh.position.z = Math.random() * 800 - 400
+
+          // 物体添加到场景中
+          scene.add(boxMesh);
+        }
+      }
+
+      // 显示实时FPS
+      showFPS() {
+        this.stats = new Stats()
+        document.querySelector(this.option.root).appendChild(this.stats.dom)
+      }
+
+      // 鼠标移动查找鼠标上的对应元素
+      mouseMove() {
+        // 实例化光线投射Raycaster,它可以进行鼠标拾取(在三维空间中计算出鼠标从哪个物体上移动过去)
+        this.raycaster = new THREE.Raycaster();
+
+        // 创建二维向量Vector2,用于存储指针移动归一化之后的x,y
+        this.pointer = new THREE.Vector2()
+
+        // 监听指针移动事件,可以用于跟踪鼠标的移动与触摸,兵器在canvas2D中也可以使用,将角度归一化,使threejs可以正常处理
+        document.querySelector(this.option.root).addEventListener('pointermove', (envet) => {
+          // 将鼠标位置归一化为设备坐标。x 和 y 方向的取值范围是(-1 to + 1)
+          this.pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+          this.pointer.y = - (event.clientY / window.innerHeight) * 2 + 1;
+        })
+      }
+
+      // 设置相机配置与GUI
+      setCameraParams() {
+        // 保存this,拓展this作用范围
+        const _that = this
+
+        // 创建配置
+        const effectController = {
+          // 相机焦距
+          focalLength: 15,
+          // 近剪裁面
+          znear: this.option.camera.near,
+          // 远剪裁面
+          zfar: this.option.camera.far,
+          // 是否通过js计算深度信息
+          // jsDepthCalculation: true,
+          // 是否使用着色器计算焦点
+          // shaderFocus: false,
+          // 光圈值,用于控制相机的光圈大小,较小的光圈值将导致更大的光圈孔径，进而增加景深效果
+          fstop: 2.8,
+          // 最大模糊程度
+          // maxblur: 1.0,
+          // 是否显示焦点,如果为true,将追踪焦点并显示为聚焦的物体
+          showFocus: false,
+          // 焦点深度
+          focalDepth: 3,
+          // 是否允许手动控制景深
+          // manualdof: false,
+          // 是否开启暗角效果,如果启用,则在相机图像的四个角落添加一种渐变效果,使图像边缘变暗
+          // vignetting: false,
+          // 是否开启深度模糊效果 
+          // depthblur: false,
+          // 用于控制模糊程度的阈值
+          // threshold: 0.5,
+          // 增益,用于调整深度模糊强度
+          // gain: 2.0,
+          // 偏移,用于调整深度模糊的偏移量
+          // bias: 0.5,
+          // 边缘模糊程度
+          // fringe: 0.7,
+          // 是否添加噪点效果
+          // noise: true,
+          // 是否启用五边形光圈
+          // pentagon: false,
+          // 抖动效果的强度
+          // dithering: 0.0001
+        };
+
+        // 设置相机参数函数
+        function setParams() {
+          // 循环应用相机配置
+          for (const e in effectController) {
+            // 判断camera中是否存在此配置
+            if (e in _that.option.camera.postprocessing.bokeh_uniforms) {
+              // 如果存在就设置配置
+              _that.option.camera.postprocessing.bokeh_uniforms[e].value = effectController[e]
+            }
+
+            /**
+             * 设置相机焦距
+             * @param {number} focalLength 相机焦距
+             * @param {number} frameHeight 相机的帧高度
+             * @param {number} frameHeight 相机的光圈值
+             * @param {number} coc 相机的焦散圆值,配合其他参数模拟景深效果和其他关于相机的控制
+            */
+            _that.option.camera.setLens(effectController.focalLength, _that.option.camera.frameHeight, effectController.fstop, _that.option.camera.coc);
+          }
+        }
+
+        // 焦距gui
+        this.gui.add(effectController, 'focalLength', 1, 135, 0.01).onChange(setParams)
+
+        // 光圈gui
+        this.gui.add(effectController, 'fstop', 1.8, 22, 0.01).onChange(setParams)
+
+        // 焦点深度gui
+        this.gui.add(effectController, 'focalDepth', 0.1, 100, 0.001).onChange(setParams)
+
+        // 是否显示焦点gui
+        this.gui.add(effectController, 'showFocus').onChange(setParams)
+
+        // 初始化相机配置
+        setParams() 
       }
     }
     const currentDemo = new CurrentDemo();
