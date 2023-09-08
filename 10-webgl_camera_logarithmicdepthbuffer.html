@@ -2,21 +2,74 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-07 19:45:54
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-07 19:46:27
+ * @LastEditTime: 2023-09-08 17:06:28
 -->
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
+  <title>10-webgl_camera_logarithmicdepthbuffer</title>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="shortcut icon" href="./public/favicon.ico" />
   <link rel="stylesheet" href="./base.css" />
-  <title>template</title>
+  <style>
+    body {
+      touch-action: none;
+    }
+
+    .renderer_label {
+      position: absolute;
+      bottom: 1em;
+      width: 100%;
+      color: white;
+      z-index: 10;
+      display: block;
+      text-align: center;
+    }
+
+    #container {
+      display: flex;
+    }
+
+    #container_normal {
+      width: 50%;
+      display: inline-block;
+      position: relative;
+    }
+
+    #container_logzbuf {
+      width: 50%;
+      display: inline-block;
+      position: relative;
+    }
+
+    #renderer_border {
+      position: absolute;
+      top: 0;
+      left: 25%;
+      bottom: 0;
+      width: 2px;
+      z-index: 10;
+      opacity: .8;
+      background: #ccc;
+      border: 1px inset #ccc;
+      cursor: col-resize;
+    }
+  </style>
 </head>
 
 <body>
-  <div id="root"></div>
+  <div id="container">
+    <div id="container_normal">
+      <h2 class="renderer_label">normal z-buffer</h2>
+    </div>
+    <div id="container_logzbuf">
+      <h2 class="renderer_label">logarithmic z-buffer</h2>
+    </div>
+    <div id="renderer_border"></div>
+  </div>
+
   <script type="importmap">
       {
         "imports": {
@@ -24,21 +77,250 @@
           "three/addons/": "./public/"
         }
       }
-    </script>
+  </script>
+
   <script type="module">
     // 初始化threejs模板
     import { InitThree, THREE } from './initThree.js';
+
+    // 导入THREE的字体组件以及文字立方体
+    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+    import Stats from 'three/addons/libs/stats.module.js';
+
     class CurrentDemo extends InitThree {
       constructor() {
-        super();
+        super({
+          root: '#container_logzbuf'
+        });
 
         // 本次demo初始化步骤
         this.initFn()
 
-        this.render();
+        // 显示FPS实时帧率
+        this.showFPS()
       }
 
+      // 本次demo初始化步骤
       initFn() {
+        const { scene } = this.option
+
+        // 配置球体与球体上的文字
+        this.sphereList = [
+          // size:球体以及文字的大小,scale:缩放比例,label:文本
+          { size: .01, scale: 0.0001, label: 'microscopic (1µm)' }, // FIXME - triangulating text fails at this size, so we scale instead
+          { size: .01, scale: 0.1, label: 'minuscule (1mm)' },
+          { size: .01, scale: 1.0, label: 'tiny (1cm)' },
+          { size: 1, scale: 1.0, label: 'child-sized (1m)' },
+          { size: 10, scale: 1.0, label: 'tree-sized (10m)' },
+          { size: 100, scale: 1.0, label: 'building-sized (100m)' },
+          { size: 1000, scale: 1.0, label: 'medium (1km)' },
+          { size: 10000, scale: 1.0, label: 'city-sized (10km)' },
+          { size: 3400000, scale: 1.0, label: 'moon-sized (3,400 Km)' },
+          { size: 12000000, scale: 1.0, label: 'planet-sized (12,000 km)' },
+          { size: 1400000000, scale: 1.0, label: 'sun-sized (1,400,000 km)' },
+          { size: 7.47e12, scale: 1.0, label: 'solar system-sized (50Au)' },
+          { size: 9.4605284e15, scale: 1.0, label: 'gargantuan (1 light year)' },
+          { size: 3.08567758e16, scale: 1.0, label: 'ludicrous (1 parsec)' },
+          { size: 1e19, scale: 1.0, label: 'mind boggling (1000 light years)' },
+        ]
+
+        // 指定相机的最大远端面与近端面
+        this.NEAR = 1e-6
+        this.FAR = 1e27;
+
+        // 指定屏幕拆分比例
+        this.screensplit = 0.25
+
+        // 实例化字体loader
+        const fontLoader = new FontLoader()
+
+        // 使用字体loader加载本地字体
+        fontLoader.load('./fonts/helvetiker_regular.typeface.json', (fontData) => {
+          // 调用加载了字体的场景,并通过此函数return的参数接收为scene
+          const scene = this.initFontScene(fontData)
+
+          // 替换全局场景
+          this.option.scene = scene
+
+          // 加载渲染器
+          // 渲染器默认配置
+          this.normal = this.initView(scene, 'normal', false)
+
+          // 渲染器使用对数深度缓存(是否使用对数深度缓存.如果要在单个场景中处理巨大的比例差异，就有必要使用)
+          this.logzbuf = this.initView(scene, 'logzbuf', true)
+
+          // 执行渲染器对场景进行渲染
+          this.render(() => {
+            // 更新实时帧率
+            this.stats.update()
+
+            // 执行normal的渲染器
+            this.normal.renderer.setSize(this.screensplit * window.innerWidth, window.innerHeight);
+            this.normal.camera.aspect = this.screensplit * window.innerWidth / window.innerHeight;
+            this.normal.camera.updateProjectionMatrix();
+            this.normal.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, 0, window.innerWidth * this.screensplit, window.innerHeight);
+            this.normal.container.style.width = (this.screensplit * 100) + '%';
+
+            this.logzbuf.renderer.setSize(screensplit_right * window.innerWidth, window.innerHeight);
+            this.logzbuf.camera.aspect = screensplit_right * window.innerWidth / window.innerHeight;
+            this.logzbuf.camera.updateProjectionMatrix();
+            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * screensplit_right, window.innerHeight);
+            this.logzbuf.container.style.width = (screensplit_right * 100) + '%';
+            this.normal.renderer.setSize(this.screensplit * window.innerWidth, window.innerHeight);
+            this.normal.camera.aspect = this.screensplit * window.innerWidth / window.innerHeight;
+            this.normal.camera.updateProjectionMatrix();
+            this.normal.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, 0, window.innerWidth * this.screensplit, window.innerHeight);
+            this.normal.container.style.width = (this.screensplit * 100) + '%';
+
+            this.logzbuf.renderer.setSize(screensplit_right * window.innerWidth, window.innerHeight);
+            this.logzbuf.camera.aspect = screensplit_right * window.innerWidth / window.innerHeight;
+            this.logzbuf.camera.updateProjectionMatrix();
+            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * screensplit_right, window.innerHeight);
+            this.logzbuf.container.style.width = (screensplit_right * 100) + '%';
+
+
+            this.normal.renderer.render(this.normal.scene, this.normal.camera);
+            this.logzbuf.renderer.render(this.logzbuf.scene, this.logzbuf.camera);
+          });
+        })
+      }
+
+      /**
+       * 初始化视图
+       * @param {THREE.Scene} scene threejs视图
+       * @param {string} name 自定义渲染器id
+       * @param {boolean} logDepthBuf 是否使用对数深度缓存
+      */
+      initView(scene, name, logDepthBuf) {
+        // 获取对应的dom元素
+        const container = document.querySelector('#container_' + name)
+
+        // 创建相机
+        const camera = new THREE.PerspectiveCamera(50, this.screensplit * window.innerWidth / window.innerHeight, this.NEAR, this.FAR);
+
+        // 相机添加到场景中
+        scene.add(camera)
+
+        // 创建渲染器,通过参数配置是否使用对数深度缓存
+        const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: logDepthBuf });
+
+        // 设置渲染器缩放比率
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // 设置渲染器尺寸
+        renderer.setSize(window.innerWidth / 2, window.innerHeight);
+
+        // 设置渲染器dom的css
+        renderer.domElement.style.position = 'relative';
+
+        // 将渲染器添加到对应的dom中
+        container.appendChild(renderer.domElement);
+
+        return { container, renderer, scene, camera }
+      }
+
+      // 初始化设置字体之后的场景(替换掉默认场景)
+      initFontScene(font) {
+        // 创建一个场景
+        const scene = new THREE.Scene()
+
+        // 添加环境光
+        scene.add(new THREE.AmbientLight(0x222222))
+
+        // 创建平行光,并设置平行光的颜色以及强度
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
+
+        // 设置平行光的位置
+        directionalLight.position.set(100, 100, 100)
+
+        // 场景中添加平行光
+        scene.add(directionalLight)
+
+        // 配置材质对象
+        const materialConfig = {
+          // 材质颜色
+          color: 0xffffff,
+          // 材质高光颜色
+          specular: 0x050505,
+          // 材质高量强度
+          shininess: 50,
+          // 材质的放射光的颜色
+          emissive: 0x000000
+        };
+
+        // 配置球体立方体对象
+        const geometry = new THREE.SphereGeometry(0.5, 24, 12);
+
+        // 根据配置数组循环生成文字与球形物体
+        this.sphereList.forEach(item => {
+          // 获取最终缩放比例,避免缩放比例为空
+          let scale = item.scale || 1
+
+          // 创建文字几何体实例
+          const textGeometry = new TextGeometry(item.label, {
+            // 字体
+            font,
+            // 字体大小
+            size: item.size,
+            // 字体厚度,默认值为50
+            height: item.size / 2
+          })
+
+          // 调用文字几何体实例的computeBoundingSphere方法,获取到文本几何体的边界球体,会给textGeometry实例添加一个boundingSphere属性,其中包含了边界球体的信息,如球心位置和半径大小,获取后续操作需要使用到的属性
+          textGeometry.computeBoundingSphere();
+
+          // 根据获取到的边界球体的信息,移动文字到中心位置
+          // 这里表示x轴向后移动一半的位置,使其居中,y轴,z轴为0表示不动
+          textGeometry.translate(-textGeometry.boundingSphere.radius, 0, 0)
+
+          // 设置材质对象的颜色为随机
+          materialConfig.color = Math.random() * 0xffffff;
+
+          // 创建材质实例(使用Phong网格材质)
+          const material = new THREE.MeshPhongMaterial(materialConfig)
+
+          // 将材质应用到文字几何体与自定义球体中,生成文字物体与球形物体
+          // 文字物体
+          const textMesh = new THREE.Mesh(textGeometry, material)
+
+          // 球形物体
+          const sphereMesh = new THREE.Mesh(geometry, material)
+
+          // 创建group组
+          const group = new THREE.Group()
+          // 将球形物体与文字物体都添加到组中
+          group.add(textMesh, sphereMesh)
+
+          // 设置group组的位置,这里通过-item.size * scale运算,将后面大的球体的z轴向后移动,这样较大的球体就不会遮挡到较小的球体了
+          group.position.z = -item.size * scale;
+
+          // 将group组添加到场景中
+          scene.add(group)
+
+          // 设置球形物体y轴的位置,将文本与球体分开,垂直排列
+          sphereMesh.position.y = item.size * scale;
+
+          // 使用multiplyScalar方法对球体进行标量乘法操作,这个方法常用于动态改变网格的大小,使其适应不同的场景或实现特定的效果.通过乘以一个标量值,我们可以按比例缩放网格对象,增大或减小其尺寸,并且保持其形状的相对一致性.
+          sphereMesh.scale.multiplyScalar(item.size * scale)
+
+          // 设置文字物体的位置与缩放
+          textMesh.scale.set(scale, scale, scale)
+
+          // 设置文字物体的z轴位置,这里通过-item.size * scale运算,将后面大的球体的z轴向后移动,这样较大的球体就不会遮挡到较小的球体了
+          textMesh.position.z = -item.size * scale;
+          console.log(item.size, 'item.size');
+          // 移动文字的y轴位置,将文本与球体分开,垂直排列
+          textMesh.position.y = (item.size / 4) * scale;
+        })
+
+        return scene
+      }
+
+      // 显示FPS实时帧率
+      showFPS() {
+        this.stats = new Stats()
+        document.querySelector(this.option.root).appendChild(this.stats.dom)
       }
     }
     const currentDemo = new CurrentDemo();

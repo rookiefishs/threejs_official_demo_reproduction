@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-05 15:53:47
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-07 14:22:02
+ * @LastEditTime: 2023-09-08 14:02:57
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -12,7 +12,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="shortcut icon" href="./public/favicon.ico" />
   <link rel="stylesheet" href="./base.css" />
-  <title>template</title>
+  <title>09-webgl_camera_cinematic</title>
 </head>
 
 <body>
@@ -29,15 +29,15 @@
     // 初始化threejs模板
     import { InitThree, THREE } from './initThree.js';
 
-  // 导入threejs的相机(透视相机的拓展相机,拥有更强大的功能)
-  // 自动平滑过渡：CinematicCamera内置了自动平滑过渡的功能，可以使相机在动画过程中产生平缓的移动效果。
-  // 追踪目标：可以设置相机跟随并追踪特定的目标对象，从而实现类似跟踪镜头的效果。
-  // 注重焦点：当相机移动时，CinematicCamera可以自动调整焦点位置，以保持目标对象处于焦点中心。
-  // 延迟跟踪：可以设置延迟跟踪，使相机在目标对象移动后稍有延迟地追踪，以产生更加流畅自然的效果。
-  // 多种参数控制：CinematicCamera具有多个可调节的参数，如追踪速度、延迟时间等，可以根据需要进行调整。
-  import { CinematicCamera } from 'three/addons/cameras/CinematicCamera.js';
-  import Stats from 'three/addons/libs/stats.module.js';
-  import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+    // 导入threejs的相机(透视相机的拓展相机,拥有更强大的功能)
+    // 自动平滑过渡：CinematicCamera内置了自动平滑过渡的功能，可以使相机在动画过程中产生平缓的移动效果。
+    // 追踪目标：可以设置相机跟随并追踪特定的目标对象，从而实现类似跟踪镜头的效果。
+    // 注重焦点：当相机移动时，CinematicCamera可以自动调整焦点位置，以保持目标对象处于焦点中心。
+    // 延迟跟踪：可以设置延迟跟踪，使相机在目标对象移动后稍有延迟地追踪，以产生更加流畅自然的效果。
+    // 多种参数控制：CinematicCamera具有多个可调节的参数，如追踪速度、延迟时间等，可以根据需要进行调整。
+    import { CinematicCamera } from 'three/addons/cameras/CinematicCamera.js';
+    import Stats from 'three/addons/libs/stats.module.js';
+    import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
     class CurrentDemo extends InitThree {
       constructor() {
@@ -294,7 +294,7 @@
         this.gui.add(effectController, 'showFocus').onChange(setParams)
 
         // 初始化相机配置
-        setParams() 
+        setParams()
       }
     }
     const currentDemo = new CurrentDemo();
