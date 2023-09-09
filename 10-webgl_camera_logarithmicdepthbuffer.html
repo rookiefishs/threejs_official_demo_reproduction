@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-07 19:45:54
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-08 17:06:28
+ * @LastEditTime: 2023-09-09 16:41:51
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -81,7 +81,7 @@
 
   <script type="module">
     // 初始化threejs模板
-    import { InitThree, THREE } from './initThree.js';
+    import { InitThree, THREE, OrbitControls } from './initThree.js';
 
     // 导入THREE的字体组件以及文字立方体
     import { FontLoader } from 'three/addons/loaders/FontLoader.js';
@@ -91,14 +91,12 @@
     class CurrentDemo extends InitThree {
       constructor() {
         super({
-          root: '#container_logzbuf'
+          root: null
         });
 
         // 本次demo初始化步骤
         this.initFn()
 
-        // 显示FPS实时帧率
-        this.showFPS()
       }
 
       // 本次demo初始化步骤
@@ -131,6 +129,12 @@
 
         // 指定屏幕拆分比例
         this.screensplit = 0.25
+        this.screensplit_right = 0
+        this.mouse = [.5, .5]
+        this.zoompos = - 100
+        this.minzoomspeed = .015;
+        this.zoomspeed = this.minzoomspeed;
+
 
         // 实例化字体loader
         const fontLoader = new FontLoader()
@@ -150,10 +154,30 @@
           // 渲染器使用对数深度缓存(是否使用对数深度缓存.如果要在单个场景中处理巨大的比例差异，就有必要使用)
           this.logzbuf = this.initView(scene, 'logzbuf', true)
 
-          // 执行渲染器对场景进行渲染
-          this.render(() => {
+          this.initThree()
+
+          // 显示FPS实时帧率
+          this.showFPS()
+
+          this.option.camera.remove()
+          this.option.renderer.domElement.remove()
+
+          this.customRender(() => {
             // 更新实时帧率
             this.stats.update()
+            this.screensplit_right = 1 - this.screensplit;
+            const minzoom = this.sphereList[0].size * this.sphereList[0].scale * 1;
+            const maxzoom = this.sphereList[this.sphereList.length - 1].size * this.sphereList[this.sphereList.length - 1].scale * 100;
+            const zoom = THREE.MathUtils.clamp(Math.pow(Math.E, this.zoompos), minzoom, maxzoom);
+            let zoompos = Math.log(zoom);
+            let damping = (Math.abs(this.zoomspeed) > this.minzoomspeed ? .95 : 1.0);
+            zoompos += this.zoomspeed;
+            this.zoomspeed *= damping;
+            this.normal.camera.position.x = Math.sin(.5 * Math.PI * (this.mouse[0] - .5)) * zoom;
+            this.normal.camera.position.y = Math.sin(.25 * Math.PI * (this.mouse[1] - .5)) * zoom;
+            this.normal.camera.position.z = Math.cos(.5 * Math.PI * (this.mouse[0] - .5)) * zoom;
+            this.normal.camera.lookAt(this.normal.scene.position);
+
 
             // 执行normal的渲染器
             this.normal.renderer.setSize(this.screensplit * window.innerWidth, window.innerHeight);
@@ -162,28 +186,40 @@
             this.normal.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, 0, window.innerWidth * this.screensplit, window.innerHeight);
             this.normal.container.style.width = (this.screensplit * 100) + '%';
 
-            this.logzbuf.renderer.setSize(screensplit_right * window.innerWidth, window.innerHeight);
-            this.logzbuf.camera.aspect = screensplit_right * window.innerWidth / window.innerHeight;
+            this.logzbuf.renderer.setSize(this.screensplit_right * window.innerWidth, window.innerHeight);
+            this.logzbuf.camera.aspect = this.screensplit_right * window.innerWidth / window.innerHeight;
             this.logzbuf.camera.updateProjectionMatrix();
-            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * screensplit_right, window.innerHeight);
-            this.logzbuf.container.style.width = (screensplit_right * 100) + '%';
+            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * this.screensplit_right, window.innerHeight);
+            this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
             this.normal.renderer.setSize(this.screensplit * window.innerWidth, window.innerHeight);
             this.normal.camera.aspect = this.screensplit * window.innerWidth / window.innerHeight;
             this.normal.camera.updateProjectionMatrix();
             this.normal.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, 0, window.innerWidth * this.screensplit, window.innerHeight);
             this.normal.container.style.width = (this.screensplit * 100) + '%';
 
-            this.logzbuf.renderer.setSize(screensplit_right * window.innerWidth, window.innerHeight);
-            this.logzbuf.camera.aspect = screensplit_right * window.innerWidth / window.innerHeight;
+            this.logzbuf.renderer.setSize(this.screensplit_right * window.innerWidth, window.innerHeight);
+            this.logzbuf.camera.aspect = this.screensplit_right * window.innerWidth / window.innerHeight;
             this.logzbuf.camera.updateProjectionMatrix();
-            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * screensplit_right, window.innerHeight);
-            this.logzbuf.container.style.width = (screensplit_right * 100) + '%';
+            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * this.screensplit_right, window.innerHeight);
+            this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
 
+            console.log('aaa');
 
             this.normal.renderer.render(this.normal.scene, this.normal.camera);
             this.logzbuf.renderer.render(this.logzbuf.scene, this.logzbuf.camera);
-          });
+            this.normal.controls.update()
+            this.logzbuf.controls.update()
+            console.log(scene, 'scene');
+          })
         })
+      }
+
+      customRender(callback) {
+        let that = this;
+        // 如果有回调函数就执行回调函数
+        callback && typeof callback === 'function' && callback();
+        // // 再次执行render函数,并且改变this指向,避免this丢失
+        requestAnimationFrame(that.customRender.bind(that, callback))
       }
 
       /**
@@ -198,6 +234,8 @@
 
         // 创建相机
         const camera = new THREE.PerspectiveCamera(50, this.screensplit * window.innerWidth / window.innerHeight, this.NEAR, this.FAR);
+
+        camera.name = '#container_' + name
 
         // 相机添加到场景中
         scene.add(camera)
@@ -217,7 +255,13 @@
         // 将渲染器添加到对应的dom中
         container.appendChild(renderer.domElement);
 
-        return { container, renderer, scene, camera }
+        const controls = new OrbitControls(camera, renderer.domElement);
+
+        // 开启控制器阻尼效果
+        controls.enableDamping = true;
+        console.log(scene.children.filter(item => item.isCamera), 'scene.children.filter(item=>item.isCamera)');
+
+        return { container, renderer, scene, camera, controls }
       }
 
       // 初始化设置字体之后的场景(替换掉默认场景)
@@ -309,7 +353,7 @@
 
           // 设置文字物体的z轴位置,这里通过-item.size * scale运算,将后面大的球体的z轴向后移动,这样较大的球体就不会遮挡到较小的球体了
           textMesh.position.z = -item.size * scale;
-          console.log(item.size, 'item.size');
+
           // 移动文字的y轴位置,将文本与球体分开,垂直排列
           textMesh.position.y = (item.size / 4) * scale;
         })
@@ -320,7 +364,7 @@
       // 显示FPS实时帧率
       showFPS() {
         this.stats = new Stats()
-        document.querySelector(this.option.root).appendChild(this.stats.dom)
+        document.body.appendChild(this.stats.dom)
       }
     }
     const currentDemo = new CurrentDemo();

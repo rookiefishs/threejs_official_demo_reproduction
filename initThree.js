@@ -34,7 +34,7 @@ export class InitThree {
       camera: option?.camera || new THREE.PerspectiveCamera(45, width / height, 1, 1000),
       renderer: option?.renderer || new THREE.WebGL1Renderer({ antialias: true }),
       isWindowSize: option?.isWindowSize !== undefined ? option.isWindowSize : true,
-      root: option?.root || '#root',
+      root: option?.root || option?.root === undefined ? '#root' : null,
       initFn:
         option?.initFn ||
         function () {
@@ -42,14 +42,9 @@ export class InitThree {
         },
       resizeCallback: option?.resizeCallback,
     };
+
     // 初始化threejs环境
-    this.initThree(this.option.initFn);
-
-    // 渲染器添加到页面中
-    document.querySelector(this.option.root).appendChild(this.option.renderer.domElement);
-
-    // 监听全局的resize,并进行对应的处理
-    this.gobalResize(this.option.resizeCallback);
+    this.option.root && this.initThree(this.option.initFn);
   }
 
   /**
@@ -76,6 +71,12 @@ export class InitThree {
 
     // 如果有回调就执行
     callBack && callBack.bind(this)(this);
+
+    // 渲染器添加到页面中
+    this.option.root && document.querySelector(this.option.root).appendChild(this.option.renderer.domElement);
+
+    // 监听全局的resize,并进行对应的处理
+    this.gobalResize(this.option.resizeCallback);
   }
 
   /**
