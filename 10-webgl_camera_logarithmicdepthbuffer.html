@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-07 19:45:54
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-09 16:41:51
+ * @LastEditTime: 2023-09-09 17:13:58
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -202,8 +202,6 @@
             this.logzbuf.camera.updateProjectionMatrix();
             this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * this.screensplit_right, window.innerHeight);
             this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
-
-            console.log('aaa');
 
             this.normal.renderer.render(this.normal.scene, this.normal.camera);
             this.logzbuf.renderer.render(this.logzbuf.scene, this.logzbuf.camera);
