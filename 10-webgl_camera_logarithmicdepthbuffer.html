@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-07 19:45:54
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-09 17:13:58
+ * @LastEditTime: 2023-09-25 19:45:52
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -55,18 +55,22 @@
       background: #ccc;
       border: 1px inset #ccc;
       cursor: col-resize;
+      box-sizing: border-box;
     }
   </style>
 </head>
 
 <body>
   <div id="container">
+    <!-- 默认缓冲图像 -->
     <div id="container_normal">
       <h2 class="renderer_label">normal z-buffer</h2>
     </div>
+    <!-- 开启对数缓冲图像 -->
     <div id="container_logzbuf">
       <h2 class="renderer_label">logarithmic z-buffer</h2>
     </div>
+    <!-- 缓冲图像分界线 -->
     <div id="renderer_border"></div>
   </div>
 
@@ -81,27 +85,41 @@
 
   <script type="module">
     // 初始化threejs模板
-    import { InitThree, THREE, OrbitControls } from './initThree.js';
+    import { InitThree, THREE } from './initThree.js';
 
     // 导入THREE的字体组件以及文字立方体
     import { FontLoader } from 'three/addons/loaders/FontLoader.js';
     import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
     import Stats from 'three/addons/libs/stats.module.js';
 
     class CurrentDemo extends InitThree {
       constructor() {
+        // 设置默认root为null,因为root需要后续单独渲染
         super({
           root: null
         });
 
-        // 本次demo初始化步骤
+        // 本次案例实现函数
         this.initFn()
-
       }
 
       // 本次demo初始化步骤
       initFn() {
-        const { scene } = this.option
+        // 获取两边图像的分界线
+        this.border = document.getElementById('renderer_border');
+
+        // 分界线绑定按下事件,监听鼠标按下之后的移动,动态的计算两边图像的宽度以及分界线的left值
+        this.border.addEventListener('pointerdown', (e) => this.onBorderPointerDown(e, this));
+
+        // 绑定全局鼠标移动事件
+        window.addEventListener('mousemove', (e) => this.onMouseMove(e, this));
+
+        // 绑定全局窗口缩放处理事件
+        window.addEventListener('resize', this.updateRendererSizes);
+
+        // 处理滚轮滚动事件,用于控制页面的缩放
+        window.addEventListener('wheel', (e) => this.onMouseWheel(e, this));
 
         // 配置球体与球体上的文字
         this.sphereList = [
@@ -127,14 +145,23 @@
         this.NEAR = 1e-6
         this.FAR = 1e27;
 
-        // 指定屏幕拆分比例
-        this.screensplit = 0.25
-        this.screensplit_right = 0
-        this.mouse = [.5, .5]
-        this.zoompos = - 100
-        this.minzoomspeed = .015;
-        this.zoomspeed = this.minzoomspeed;
+        // 左边指定屏幕拆分比例
+        this.screensplit = 0.5
 
+        // 右边指定屏幕拆分比例
+        this.screensplit_right = 0
+
+        // 根据鼠标位置控制相机位置
+        this.mouse = [.5, .5]
+
+        // threejs场景缩放
+        this.zoompos = -200
+
+        // 最小场景缩放的速度
+        this.minzoomspeed = .015;
+
+        // 场景缩放的速度
+        this.zoomspeed = this.minzoomspeed;
 
         // 实例化字体loader
         const fontLoader = new FontLoader()
@@ -148,68 +175,124 @@
           this.option.scene = scene
 
           // 加载渲染器
-          // 渲染器默认配置
           this.normal = this.initView(scene, 'normal', false)
 
           // 渲染器使用对数深度缓存(是否使用对数深度缓存.如果要在单个场景中处理巨大的比例差异，就有必要使用)
           this.logzbuf = this.initView(scene, 'logzbuf', true)
 
+          // 初始化场景
           this.initThree()
 
           // 显示FPS实时帧率
           this.showFPS()
 
+          // 移除默认相机与渲染器
           this.option.camera.remove()
           this.option.renderer.domElement.remove()
 
+          // 使用自定义的渲染,执行对应的回调函数 
           this.customRender(() => {
             // 更新实时帧率
             this.stats.update()
-            this.screensplit_right = 1 - this.screensplit;
+
             const minzoom = this.sphereList[0].size * this.sphereList[0].scale * 1;
             const maxzoom = this.sphereList[this.sphereList.length - 1].size * this.sphereList[this.sphereList.length - 1].scale * 100;
-            const zoom = THREE.MathUtils.clamp(Math.pow(Math.E, this.zoompos), minzoom, maxzoom);
-            let zoompos = Math.log(zoom);
             let damping = (Math.abs(this.zoomspeed) > this.minzoomspeed ? .95 : 1.0);
-            zoompos += this.zoomspeed;
+
+            const zoom = THREE.MathUtils.clamp(Math.pow(Math.E, this.zoompos), minzoom, maxzoom);
+            this.zoompos = Math.log(zoom);
+
+            if ((zoom == minzoom && this.zoomspeed < 0) || (zoom == maxzoom && this.zoomspeed > 0)) {
+              damping = .85;
+            }
+
+            this.zoompos += this.zoomspeed;
             this.zoomspeed *= damping;
+
             this.normal.camera.position.x = Math.sin(.5 * Math.PI * (this.mouse[0] - .5)) * zoom;
             this.normal.camera.position.y = Math.sin(.25 * Math.PI * (this.mouse[1] - .5)) * zoom;
             this.normal.camera.position.z = Math.cos(.5 * Math.PI * (this.mouse[0] - .5)) * zoom;
             this.normal.camera.lookAt(this.normal.scene.position);
 
-
-            // 执行normal的渲染器
-            this.normal.renderer.setSize(this.screensplit * window.innerWidth, window.innerHeight);
-            this.normal.camera.aspect = this.screensplit * window.innerWidth / window.innerHeight;
-            this.normal.camera.updateProjectionMatrix();
-            this.normal.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, 0, window.innerWidth * this.screensplit, window.innerHeight);
-            this.normal.container.style.width = (this.screensplit * 100) + '%';
-
-            this.logzbuf.renderer.setSize(this.screensplit_right * window.innerWidth, window.innerHeight);
-            this.logzbuf.camera.aspect = this.screensplit_right * window.innerWidth / window.innerHeight;
-            this.logzbuf.camera.updateProjectionMatrix();
-            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * this.screensplit_right, window.innerHeight);
-            this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
-            this.normal.renderer.setSize(this.screensplit * window.innerWidth, window.innerHeight);
-            this.normal.camera.aspect = this.screensplit * window.innerWidth / window.innerHeight;
-            this.normal.camera.updateProjectionMatrix();
-            this.normal.camera.setViewOffset(window.innerWidth, window.innerHeight, 0, 0, window.innerWidth * this.screensplit, window.innerHeight);
-            this.normal.container.style.width = (this.screensplit * 100) + '%';
-
-            this.logzbuf.renderer.setSize(this.screensplit_right * window.innerWidth, window.innerHeight);
-            this.logzbuf.camera.aspect = this.screensplit_right * window.innerWidth / window.innerHeight;
-            this.logzbuf.camera.updateProjectionMatrix();
-            this.logzbuf.camera.setViewOffset(window.innerWidth, window.innerHeight, window.innerWidth * this.screensplit, 0, window.innerWidth * this.screensplit_right, window.innerHeight);
-            this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
+            // Clone camera settings across both scenes
+            this.logzbuf.camera.position.copy(this.normal.camera.position);
+            this.logzbuf.camera.quaternion.copy(this.normal.camera.quaternion);
+            // Update renderer sizes if the split has changed
+            if (this.screensplit_right != 1 - this.screensplit) {
+              this.updateRendererSizes();
+            }
 
             this.normal.renderer.render(this.normal.scene, this.normal.camera);
             this.logzbuf.renderer.render(this.logzbuf.scene, this.logzbuf.camera);
-            this.normal.controls.update()
-            this.logzbuf.controls.update()
-            console.log(scene, 'scene');
           })
         })
+      }
+
+      // 按下分界线触发,控制分界线的位置以及左右两个视图的比例,当鼠标松手时,移除这两个事件
+      onBorderPointerDown(e, that) {
+        function onBorderPointerUp() {
+          window.removeEventListener('pointermove', borderPointerMove);
+          window.removeEventListener('pointerup', onBorderPointerUp);
+        }
+
+        function borderPointerMove(e) {
+          that.onBorderPointerMove(e, that)
+        }
+
+        window.addEventListener('pointermove', borderPointerMove);
+        window.addEventListener('pointerup', onBorderPointerUp);
+      }
+
+      // 鼠标移动触发,修改mouse数组,控制场景中相机的移动
+      onMouseMove(ev, that) {
+        that.mouse[0] = ev.clientX / window.innerWidth;
+        that.mouse[1] = ev.clientY / window.innerHeight;
+      }
+
+      // 监听场景的缩放,控制场景缩放的速度
+      onMouseWheel(ev, that) {
+        // 获取鼠标滚轮旋转的数据
+        const amount = ev.deltaY;
+
+        // 如果为0,就跳过后续代码的执行
+        if (amount === 0) return;
+
+        // 根据获取旋转的数据,转换得到缩放的速度,实现用户鼠标缩放越快,页面缩放越快的效果
+        const dir = amount / Math.abs(amount);
+        
+        that.zoomspeed = dir / 10;
+        that.minzoomspeed = 0.001;
+      }
+
+      onBorderPointerUp(e, that) {
+        window.removeEventListener('pointermove', that.onBorderPointerMove);
+        window.removeEventListener('pointerup', that.onBorderPointerUp);
+      }
+
+      onBorderPointerMove(ev, that) {
+        that.screensplit = Math.max(0, Math.min(1, ev.clientX / window.innerWidth));
+      }
+      updateRendererSizes() {
+        // Recalculate size for both renderers when screen size or split location changes
+        let SCREEN_WIDTH = window.innerWidth;
+        let SCREEN_HEIGHT = window.innerHeight;
+
+        this.screensplit_right = 1 - this.screensplit;
+
+        this.normal.renderer.setSize(this.screensplit * SCREEN_WIDTH, SCREEN_HEIGHT);
+        this.normal.camera.aspect = this.screensplit * SCREEN_WIDTH / SCREEN_HEIGHT;
+        this.normal.camera.updateProjectionMatrix();
+        this.normal.camera.setViewOffset(SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, SCREEN_WIDTH * this.screensplit, SCREEN_HEIGHT);
+        this.normal.container.style.width = (this.screensplit * 100) + '%';
+
+        this.logzbuf.renderer.setSize(this.screensplit_right * SCREEN_WIDTH, SCREEN_HEIGHT);
+        this.logzbuf.camera.aspect = this.screensplit_right * SCREEN_WIDTH / SCREEN_HEIGHT;
+        this.logzbuf.camera.updateProjectionMatrix();
+        this.logzbuf.camera.setViewOffset(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH * this.screensplit, 0, SCREEN_WIDTH * this.screensplit_right, SCREEN_HEIGHT);
+        this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
+
+        this.border.style.left = (this.screensplit * 100) + '%';
+        console.log(this.border.style.left, 'this.border.style.left');
       }
 
       customRender(callback) {
@@ -253,13 +336,8 @@
         // 将渲染器添加到对应的dom中
         container.appendChild(renderer.domElement);
 
-        const controls = new OrbitControls(camera, renderer.domElement);
 
-        // 开启控制器阻尼效果
-        controls.enableDamping = true;
-        console.log(scene.children.filter(item => item.isCamera), 'scene.children.filter(item=>item.isCamera)');
-
-        return { container, renderer, scene, camera, controls }
+        return { container, renderer, scene, camera, }
       }
 
       // 初始化设置字体之后的场景(替换掉默认场景)
