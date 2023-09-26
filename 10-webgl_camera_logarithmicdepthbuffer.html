@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-07 19:45:54
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-25 19:45:52
+ * @LastEditTime: 2023-09-26 11:18:30
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -174,7 +174,7 @@
           // 替换全局场景
           this.option.scene = scene
 
-          // 加载渲染器
+          // 加载默认渲染器
           this.normal = this.initView(scene, 'normal', false)
 
           // 渲染器使用对数深度缓存(是否使用对数深度缓存.如果要在单个场景中处理巨大的比例差异，就有必要使用)
@@ -195,34 +195,55 @@
             // 更新实时帧率
             this.stats.update()
 
+            // 计算场景最小缩放(最小的球体*最小的球体的缩放比率)
             const minzoom = this.sphereList[0].size * this.sphereList[0].scale * 1;
+
+            // 计算场景最大缩放(最大的球体*最大的球体的缩放比率)
             const maxzoom = this.sphereList[this.sphereList.length - 1].size * this.sphereList[this.sphereList.length - 1].scale * 100;
+
+            // 计算阻尼,判断场景缩放速度的绝对值是否大于设置的场景最小缩放速度,如果大于就设置阻尼为0.95,反之则设置阻尼为1
             let damping = (Math.abs(this.zoomspeed) > this.minzoomspeed ? .95 : 1.0);
 
+            // 生成缩放灵活度值zoom,具体生成方式为 首先获取zoompos(默认缩放速度)的Math.E次幂,然后将这个获取的缩放速度的值限定在minzoom和maxzoom值中,如果这个值小于minzoom,那么就将这个值替换为minzoom,如果大于maxzoom,就将这个值替换为maxzoom,不小于minzoom和不大于maxzoom,则表示使用这个值本身
             const zoom = THREE.MathUtils.clamp(Math.pow(Math.E, this.zoompos), minzoom, maxzoom);
+
+            // 这里通过Math.log方法计算zoom的自然对数,这个值即为场景缩放的对数值,并且这里因为是一个自定义的customRender函数,所以会不断地执行,这里的缩放值也会不断的更新
             this.zoompos = Math.log(zoom);
 
+            // 如果缩放比例已经达到了最小的缩放比例,并且要进一步尝试缩放时 或者 缩放比例已经达到了最大的缩放比例,并且要进一步尝试放大时,都会满足这里的if语句,就会将阻尼设置为0.85
             if ((zoom == minzoom && this.zoomspeed < 0) || (zoom == maxzoom && this.zoomspeed > 0)) {
               damping = .85;
             }
 
+            // 将场景缩放的速度应用到当前的场景缩放比例中
             this.zoompos += this.zoomspeed;
+
+            // 应用阻尼到缩放速度中
             this.zoomspeed *= damping;
 
+            // 通过鼠标的位置动态的控制相机的位置
             this.normal.camera.position.x = Math.sin(.5 * Math.PI * (this.mouse[0] - .5)) * zoom;
             this.normal.camera.position.y = Math.sin(.25 * Math.PI * (this.mouse[1] - .5)) * zoom;
             this.normal.camera.position.z = Math.cos(.5 * Math.PI * (this.mouse[0] - .5)) * zoom;
+
+            // 设置相机的焦点聚焦在场景的中心位置,也就表示相机始终指向场景的中心点
             this.normal.camera.lookAt(this.normal.scene.position);
 
-            // Clone camera settings across both scenes
+            // 复制默认渲染器的相机位置到开启的对数缓冲渲染器的相机位置中
             this.logzbuf.camera.position.copy(this.normal.camera.position);
+
+            // 复制默认渲染器的旋转四元数到开启了对数缓冲渲染器的旋转四元数中
             this.logzbuf.camera.quaternion.copy(this.normal.camera.quaternion);
-            // Update renderer sizes if the split has changed
+
+            // 在窗口比例发生变化时,重新渲染左右两边的视图
             if (this.screensplit_right != 1 - this.screensplit) {
               this.updateRendererSizes();
             }
 
+            // 执行默认渲染器,并传入默认渲染器的场景与相机
             this.normal.renderer.render(this.normal.scene, this.normal.camera);
+
+            // 执行开启了对数缓冲的渲染器,并传入对应的场景和相机
             this.logzbuf.renderer.render(this.logzbuf.scene, this.logzbuf.camera);
           })
         })
@@ -230,21 +251,26 @@
 
       // 按下分界线触发,控制分界线的位置以及左右两个视图的比例,当鼠标松手时,移除这两个事件
       onBorderPointerDown(e, that) {
+        // 当鼠标从分界线上移除时,移除掉对应的事件
         function onBorderPointerUp() {
           window.removeEventListener('pointermove', borderPointerMove);
           window.removeEventListener('pointerup', onBorderPointerUp);
         }
 
+
+        // 移动事件代理的一个函数,主要作用时执行内部的onBorderPointerMove函数并传递this进去
         function borderPointerMove(e) {
           that.onBorderPointerMove(e, that)
         }
 
+        // 绑定移动与抬起事件
         window.addEventListener('pointermove', borderPointerMove);
         window.addEventListener('pointerup', onBorderPointerUp);
       }
 
       // 鼠标移动触发,修改mouse数组,控制场景中相机的移动
       onMouseMove(ev, that) {
+        // 更新mouse
         that.mouse[0] = ev.clientX / window.innerWidth;
         that.mouse[1] = ev.clientY / window.innerHeight;
       }
@@ -259,47 +285,77 @@
 
         // 根据获取旋转的数据,转换得到缩放的速度,实现用户鼠标缩放越快,页面缩放越快的效果
         const dir = amount / Math.abs(amount);
-        
+
         that.zoomspeed = dir / 10;
         that.minzoomspeed = 0.001;
       }
 
+      // 分界线上的鼠标抬起触发,移除绑定的移动事件与抬起事件
       onBorderPointerUp(e, that) {
         window.removeEventListener('pointermove', that.onBorderPointerMove);
         window.removeEventListener('pointerup', that.onBorderPointerUp);
       }
 
+      // 分界线上的鼠标移动触发,修改左右屏的比例
       onBorderPointerMove(ev, that) {
         that.screensplit = Math.max(0, Math.min(1, ev.clientX / window.innerWidth));
       }
-      updateRendererSizes() {
-        // Recalculate size for both renderers when screen size or split location changes
-        let SCREEN_WIDTH = window.innerWidth;
-        let SCREEN_HEIGHT = window.innerHeight;
 
+      /**
+       * 更新左右视图的比例以及分界线的位置
+      */
+      updateRendererSizes() {
+        // 获取剩余的右边视图的区域范围
         this.screensplit_right = 1 - this.screensplit;
 
-        this.normal.renderer.setSize(this.screensplit * SCREEN_WIDTH, SCREEN_HEIGHT);
-        this.normal.camera.aspect = this.screensplit * SCREEN_WIDTH / SCREEN_HEIGHT;
+        // 设置默认渲染器(左边视图)的渲染范围
+        this.normal.renderer.setSize(this.screensplit * innerWidth, innerHeight);
+
+        // 设置默认渲染器(左边视图)的相机宽高比
+        this.normal.camera.aspect = this.screensplit * innerWidth / innerHeight;
+
+        // 执行默认渲染器(左边视图)的相机更新
         this.normal.camera.updateProjectionMatrix();
-        this.normal.camera.setViewOffset(SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, SCREEN_WIDTH * this.screensplit, SCREEN_HEIGHT);
+
+        // 设置默认渲染器(左边视图)的相机偏移量
+        // setViewOffset(总宽度,总高度,偏移x,偏移y,显示的宽度,显示的高度)
+        this.normal.camera.setViewOffset(innerWidth, innerHeight, 0, 0, innerWidth * this.screensplit, innerHeight);
+
+        // 根据最新调整的做优视图比例调整默认视图的宽度(左边视图)
         this.normal.container.style.width = (this.screensplit * 100) + '%';
 
-        this.logzbuf.renderer.setSize(this.screensplit_right * SCREEN_WIDTH, SCREEN_HEIGHT);
-        this.logzbuf.camera.aspect = this.screensplit_right * SCREEN_WIDTH / SCREEN_HEIGHT;
+        // 设置开启了对数缓冲的渲染器(右边视图)的渲染范围
+        this.logzbuf.renderer.setSize(this.screensplit_right * innerWidth, innerHeight);
+
+        // 设置开启了对数缓冲的渲染器(右边视图)的相机宽高比
+        this.logzbuf.camera.aspect = this.screensplit_right * innerWidth / innerHeight;
+
+        // 执行开启了对数缓冲的渲染器(右边视图)的相机更新
         this.logzbuf.camera.updateProjectionMatrix();
-        this.logzbuf.camera.setViewOffset(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_WIDTH * this.screensplit, 0, SCREEN_WIDTH * this.screensplit_right, SCREEN_HEIGHT);
+
+        // 设置开启了对数缓冲的渲染器(右边视图)的相机偏移量
+        // setViewOffset(总宽度,总高度,偏移x,偏移y,显示的宽度,显示的高度)
+        this.logzbuf.camera.setViewOffset(innerWidth, innerHeight, innerWidth * this.screensplit, 0, innerWidth * this.screensplit_right, innerHeight);
+
+        // 根据最新调整的做优视图比例调整默认视图的宽度(右边视图)
         this.logzbuf.container.style.width = (this.screensplit_right * 100) + '%';
 
+        // 更新分界线的位置
         this.border.style.left = (this.screensplit * 100) + '%';
-        console.log(this.border.style.left, 'this.border.style.left');
       }
 
+      /**
+       * 使用requestAnimationFrame来定时执行对应的回调函数,作为渲染器循环渲染
+       * @param {function} callback 回调函数,会在每次requestAnimationFrame调用时执行
+      */
       customRender(callback) {
+        // 保存this
         let that = this;
+
         // 如果有回调函数就执行回调函数
         callback && typeof callback === 'function' && callback();
-        // // 再次执行render函数,并且改变this指向,避免this丢失
+
+        // 再次执行render函数,并且改变this指向,避免this丢失
         requestAnimationFrame(that.customRender.bind(that, callback))
       }
 
@@ -316,6 +372,7 @@
         // 创建相机
         const camera = new THREE.PerspectiveCamera(50, this.screensplit * window.innerWidth / window.innerHeight, this.NEAR, this.FAR);
 
+        // 定义相机name
         camera.name = '#container_' + name
 
         // 相机添加到场景中
@@ -335,7 +392,6 @@
 
         // 将渲染器添加到对应的dom中
         container.appendChild(renderer.domElement);
-
 
         return { container, renderer, scene, camera, }
       }
