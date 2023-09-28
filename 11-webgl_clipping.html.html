@@ -1,0 +1,92 @@
+<!--
+ * @Author: wangzhiyu
+ * @Date: 2023-09-28 09:40:07
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-09-28 15:52:22
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./public/favicon.ico" />
+  <link rel="stylesheet" href="./base.css" />
+  <title>template</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+  <script type="module">
+    // 初始化threejs模板
+    import { InitThree, THREE } from './initThree.js';
+    class CurrentDemo extends InitThree {
+      constructor() {
+        super();
+
+        this.render();
+
+        // 初始化
+        this.initFn()
+      }
+
+      initFn() {
+        const { scene } = this.option
+
+        // 场景中添加环境光
+        scene.add(new THREE.AmbientLight(0x505050))
+
+        // 创建聚光灯
+        const spot = new THREE.SpotLight(0xffffff)
+        // 设置聚光灯的 光纤散射角度(聚光灯的最大范围)
+        spot.angle = Math.PI / 5
+        // 设置聚光灯的 聚光锥的半影衰减百分比,在0-1之间,默认为0
+        spot.penumbra = 0.2
+        // 设置聚光的 位置
+        spot.position.set(2, 3, 3)
+        // 设置聚光灯投射阴影
+        spot.castShadow = true
+        // 设置聚光灯投射的阴影的相机的最大近端面
+        spot.shadow.camera.near = 3
+        // 设置聚光灯投射的阴影的相机的最大远端面
+        spot.shadow.camera.far = 10
+        // 设置聚光灯投射的阴影的宽度
+        spot.shadow.mapSize.width = 1024
+        // 设置聚光灯投射的阴影的高度
+        spot.shadow.mapSize.height = 1024
+        // 聚光灯添加到场景中
+        scene.add(spot)
+
+        // 创建平行光
+        const direction = new THREE.DirectionalLight(0x55505a, 1)
+        scene.add(direction)
+
+
+        // 设置
+
+        const geometry = new THREE.PlaneGeometry(10, 10);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const plane = new THREE.Mesh(geometry, material);
+        plane.rotation.x = Math.PI / 2
+        scene.add(plane);
+        const geometry2 = new THREE.TorusKnotGeometry(1, 0.4, 64, 8);
+        const material2 = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const torusKnot = new THREE.Mesh(geometry2, material2);
+        scene.add(torusKnot);
+        const axes = new THREE.AxesHelper(5)
+        scene.add(axes)
+      }
+    }
+    const currentDemo = new CurrentDemo();
+  </script>
+</body>
+
+</html>
