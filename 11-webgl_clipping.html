@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-28 09:40:07
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-09-28 15:52:22
+ * @LastEditTime: 2023-10-08 17:32:19
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -28,18 +28,43 @@
   <script type="module">
     // 初始化threejs模板
     import { InitThree, THREE } from './initThree.js';
+
+    // 导入threejs的帧率监控
+    import Stats from 'three/addons/libs/stats.module.js';
+
     class CurrentDemo extends InitThree {
       constructor() {
-        super();
+        super({
+          camera: new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.25, 16)
+        });
 
-        this.render();
+        this.render(() => {
+          this.stats && this.stats.update()
+
+          if (this.torusKnotMesh) {
+            this.torusKnotMesh.position.y = 0.8;
+            this.torusKnotMesh.rotation.x += 0.01
+            this.torusKnotMesh.rotation.y += 0.01
+          }
+        });
 
         // 初始化
         this.initFn()
+
+        // 挂载FPS帧率监控
+        this.showFPS()
       }
 
       initFn() {
-        const { scene } = this.option
+        const { scene, renderer, camera } = this.option
+
+        // 设置相机位置
+        camera.position.set(0, 1.3, 3)
+
+        // 设置渲染器渲染阴影
+        renderer.shadowMap.enabled = true;
+        // 设置渲染器考虑对象级剪切平面
+        renderer.localClippingEnabled = true;
 
         // 场景中添加环境光
         scene.add(new THREE.AmbientLight(0x505050))
@@ -65,24 +90,74 @@
         // 聚光灯添加到场景中
         scene.add(spot)
 
-        // 创建平行光
+        // 创建平行光,并设置平行光的颜色与强度
         const direction = new THREE.DirectionalLight(0x55505a, 1)
+        // 设置平行光的位置
+        direction.position.set(0, 3, 0);
+        // 设置平行光投射阴影
+        direction.castShadow = true;
+        // 设置平行光投射的阴影的相机的最大近端面
+        direction.shadow.camera.near = 1;
+        // 设置平行光投射的阴影的相机的最大远端面
+        direction.shadow.camera.far = 10;
+        // 设置平行光投射的阴影的相机的右偏移量
+        direction.shadow.camera.right = 1;
+        // 设置平行光投射的阴影的相机的左偏移量
+        direction.shadow.camera.left = -1;
+        // 设置平行光投射的阴影的相机的上偏移量
+        direction.shadow.camera.top = 1;
+        // 设置平行光投射的阴影的相机的下偏移量
+        direction.shadow.camera.bottom = - 1;
+        // 设置平行光投射的阴影的宽度
+        direction.shadow.mapSize.width = 1024;
+        // 设置平行光投射的阴影的高度
+        direction.shadow.mapSize.height = 1024;
+        // 平行光添加到场景中
         scene.add(direction)
 
+        // 设置平面立方体,作为地板,接收阴影,参数含义为x宽度为9,y高度为9,平面的宽度分段数为1,平面的高度分段数为1
+        const planCube = new THREE.PlaneGeometry(9, 9, 1, 1);
+        // 平面立方体的材质,设置平面立方体的颜色与亮度
+        const planMaterial = new THREE.MeshPhongMaterial({ color: 0xa0adaf, side: THREE.DoubleSide , shininess: 150 });
+        // 创建平面物体
+        const planMesh = new THREE.Mesh(planCube, planMaterial);
+        // 控制平面物体的旋转角度,使其平铺在场景中
+        planMesh.rotation.x = -Math.PI / 2
+        // 设置平面物体可以接收阴影
+        planMesh.receiveShadow = true
+        // 平面添加到场景里
+        scene.add(planMesh);
 
-        // 设置
+        // 创建自定义剪裁平面,THREE.Plane方法用于在三维空间中创建无线延伸的二维平面,参数为平面的单位长度法向量,从原点到平面的有符号距离
+        this.customPlan = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.8)
 
-        const geometry = new THREE.PlaneGeometry(10, 10);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-        const plane = new THREE.Mesh(geometry, material);
-        plane.rotation.x = Math.PI / 2
-        scene.add(plane);
-        const geometry2 = new THREE.TorusKnotGeometry(1, 0.4, 64, 8);
-        const material2 = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-        const torusKnot = new THREE.Mesh(geometry2, material2);
-        scene.add(torusKnot);
-        const axes = new THREE.AxesHelper(5)
-        scene.add(axes)
+        // 创建圆环缓冲扭结几何体,参数分别表示为圆环的半径为0.4,管道的半径为0.08,管道的分段数量为95,横截面分段数量为20
+        const torusKnot = new THREE.TorusKnotGeometry(0.4, 0.08, 95, 20)
+        // 设置网格材质
+        const girdMaterial = new THREE.MeshPhongMaterial({
+          // 材质颜色
+          color: 0x80ee10,
+          // 材质亮度
+          shininess: 100,
+          // 材质显示面
+          side: THREE.DoubleSide,
+          // 设置材质的裁剪面
+          clippingPlanes: [this.customPlan],
+          // 设置是否根据裁剪面显示阴影
+          clipShadows: true
+        })
+        // 创建环缓冲扭结物体
+        this.torusKnotMesh = new THREE.Mesh(torusKnot, girdMaterial)
+        // 设置物体阻挡阴影
+        this.torusKnotMesh.castShadow = true
+        // 将物体添加到场景中
+        scene.add(this.torusKnotMesh)
+      }
+
+      // 显示实时帧率
+      showFPS() {
+        this.stats = new Stats()
+        document.querySelector(this.option.root).appendChild(this.stats.dom)
       }
     }
     const currentDemo = new CurrentDemo();
