@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-09-28 09:40:07
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-10-08 17:32:19
+ * @LastEditTime: 2023-10-09 19:17:27
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -32,6 +32,8 @@
     // 导入threejs的帧率监控
     import Stats from 'three/addons/libs/stats.module.js';
 
+    import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
     class CurrentDemo extends InitThree {
       constructor() {
         super({
@@ -58,13 +60,23 @@
       initFn() {
         const { scene, renderer, camera } = this.option
 
+        // 创建GUI可视化工具
+        this.gui = new GUI({ width: 310 })
+
         // 设置相机位置
         camera.position.set(0, 1.3, 3)
 
         // 设置渲染器渲染阴影
         renderer.shadowMap.enabled = true;
+
         // 设置渲染器考虑对象级剪切平面
         renderer.localClippingEnabled = true;
+
+        // 定义渲染器空裁剪平面
+        const emptyPlan = Object.freeze([])
+
+        // 设置渲染器的裁剪平面
+        renderer.clippingPlanes = emptyPlan
 
         // 场景中添加环境光
         scene.add(new THREE.AmbientLight(0x505050))
@@ -118,7 +130,7 @@
         // 设置平面立方体,作为地板,接收阴影,参数含义为x宽度为9,y高度为9,平面的宽度分段数为1,平面的高度分段数为1
         const planCube = new THREE.PlaneGeometry(9, 9, 1, 1);
         // 平面立方体的材质,设置平面立方体的颜色与亮度
-        const planMaterial = new THREE.MeshPhongMaterial({ color: 0xa0adaf, side: THREE.DoubleSide , shininess: 150 });
+        const planMaterial = new THREE.MeshPhongMaterial({ color: 0xa0adaf, side: THREE.DoubleSide, shininess: 150 });
         // 创建平面物体
         const planMesh = new THREE.Mesh(planCube, planMaterial);
         // 控制平面物体的旋转角度,使其平铺在场景中
@@ -129,7 +141,10 @@
         scene.add(planMesh);
 
         // 创建自定义剪裁平面,THREE.Plane方法用于在三维空间中创建无线延伸的二维平面,参数为平面的单位长度法向量,从原点到平面的有符号距离
-        this.customPlan = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.8)
+        const customPlan = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.8)
+
+        // 全局裁剪平面
+        const globalPlan = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.1)
 
         // 创建圆环缓冲扭结几何体,参数分别表示为圆环的半径为0.4,管道的半径为0.08,管道的分段数量为95,横截面分段数量为20
         const torusKnot = new THREE.TorusKnotGeometry(0.4, 0.08, 95, 20)
@@ -142,7 +157,7 @@
           // 材质显示面
           side: THREE.DoubleSide,
           // 设置材质的裁剪面
-          clippingPlanes: [this.customPlan],
+          clippingPlanes: [customPlan],
           // 设置是否根据裁剪面显示阴影
           clipShadows: true
         })
@@ -152,6 +167,70 @@
         this.torusKnotMesh.castShadow = true
         // 将物体添加到场景中
         scene.add(this.torusKnotMesh)
+
+        const settings = {
+          // 获取是否启用自定义剪裁平面
+          get 'LocalEnabled'() {
+            return renderer.localClippingEnabled
+          },
+
+          // 设置自定义裁剪平面隐藏启用
+          set 'LocalEnabled'(value) {
+            renderer.localClippingEnabled = value
+          },
+
+          // 获取自定义裁剪的管道部分是否投射阴影
+          get 'LocalShadow'() {
+            return girdMaterial.clipShadows
+          },
+
+          // 获取自定义裁剪的管道部分是否投射阴影
+          set 'LocalShadow'(value) {
+            girdMaterial.clipShadows = value
+          },
+
+          // 获取自定义裁剪的平面的位置
+          get 'LocalPlans'() {
+            return customPlan.constant
+          },
+
+          // 设置自定义裁剪的位置
+          set 'LocalPlans'(value) {
+            customPlan.constant = value
+          },
+
+          // 获取是否启用全局剪裁平面
+          get 'globalEnables'() {
+            return renderer.clippingPlanes !== emptyPlan
+          },
+
+          // 设置全局裁剪平面是否启用
+          set 'globalEnables'(value) {
+            renderer.clippingPlanes = value ? [globalPlan] : emptyPlan
+          },
+
+          // 获取自定义裁剪的平面的位置
+          get 'globalPlans'() {
+            return globalPlan.constant
+          },
+
+          // 设置自定义裁剪的位置
+          set 'globalPlans'(value) {
+            globalPlan.constant = value
+          },
+        }
+
+        // 设置GUI控制自定义剪裁平面
+        const localFolder = this.gui.addFolder('localFolder')
+        localFolder.add(settings, 'LocalEnabled')
+        localFolder.add(settings, 'LocalShadow')
+        // 0.3表示最大取值范围 1.25表示最小取值范围
+        localFolder.add(settings, 'LocalPlans', 0.3, 1.25)
+
+        // 设置GUI控制全局剪裁平面
+        const globalFolder = this.gui.addFolder('globalFolder')
+        globalFolder.add(settings, 'globalEnables')
+        globalFolder.add(settings, 'globalPlans', -0.4, 3)
       }
 
       // 显示实时帧率
