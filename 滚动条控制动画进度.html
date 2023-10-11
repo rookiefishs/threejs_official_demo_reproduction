@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./public/favicon.ico" />
+  <link rel="stylesheet" href="./base.css" />
+  <title>template</title>
+</head>
+
+<body>
+  <input type="range" id="animationSlider" min="0" max="1" step="0.01" value="0" />
+  <p id="progressText">0%</p>
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+  <script type="module">
+    // 初始化threejs模板
+    import { THREE } from './initThree.js';
+    // 创建场景
+    const scene = new THREE.Scene();
+
+    // 创建相机
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    // 创建渲染器
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 创建几何体
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+
+    // 创建动画
+    const clock = new THREE.Clock();
+    const mixer = new THREE.AnimationMixer(cube);
+    const rotationAnimation = new THREE.AnimationClip('rotation_animation', -1, [
+      new THREE.KeyframeTrack('.rotation[x]', [0, 1], [0, Math.PI / 2]),
+      new THREE.KeyframeTrack('.rotation[y]', [0, 1], [0, Math.PI / 2]),
+      new THREE.KeyframeTrack('.rotation[z]', [0, 1], [0, Math.PI / 2])
+    ]);
+    const action = mixer.clipAction(rotationAnimation);
+    action.setEffectiveTimeScale(0);
+    action.loop = THREE.LoopRepeat;
+    action.play();
+
+    // 滚动条控制动画进度
+    const animationSlider = document.getElementById('animationSlider');
+
+    animationSlider.addEventListener('input', function () {
+      const progress = parseFloat(animationSlider.value);
+      action.time = action.getClip().duration * progress;
+      mixer.update(0);
+    });
+
+    // 渲染循环
+    function render() {
+      renderer.render(scene, camera);
+      requestAnimationFrame(render);
+    }
+
+    render();
+  </script>
+</body>
+
+</html>

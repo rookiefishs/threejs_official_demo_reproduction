@@ -1,16 +1,17 @@
-
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="shortcut icon" href="./public/favicon.ico" />
-    <link rel="stylesheet" href="./base.css" />
-    <title>template</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="importmap">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./public/favicon.ico" />
+  <link rel="stylesheet" href="./base.css" />
+  <title>template</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="importmap">
       {
         "imports": {
           "three": "./threeSource/three.module.js",
@@ -18,112 +19,104 @@
         }
       }
     </script>
-    <script type="module">
-      // 初始化threejs模板
-      import { InitThree, THREE } from './initThree.js';
-      import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-      import Stats from 'three/addons/libs/stats.module.js';
+  <script type="module">
+    // 初始化threejs模板
+    import { InitThree, THREE } from './initThree.js';
+    import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+    import Stats from 'three/addons/libs/stats.module.js';
 
-      class CurrentDemo extends InitThree {
-        constructor() {
-          super();
-
-          // 本次demo实现初始化函数
-          this.initFn();
-          this.render(() => {
-            let delta = this.clock.getDelta();
-
-            // 更新动画
-            this.mixer && this.mixer.update(delta);
-          });
-        }
+    class CurrentDemo extends InitThree {
+      constructor() {
+        super();
 
         // 本次demo实现初始化函数
-        initFn() {
-          // 解构获取
-          const { camera, renderer, controls, scene, width, height } = this.option;
+        this.initFn();
+        this.render(() => {
+          let delta = this.clock.getDelta();
 
-          // 设置相机初始位置
-          camera.position.set(25, 25, 5);
-
-          // 创建时钟
-          this.clock = new THREE.Clock();
-
-          // 辅助线
-          const axesHelper = new THREE.AxesHelper(5);
-          scene.add(axesHelper);
-
-          // 创建球体
-          const geometry = new THREE.SphereGeometry(1, 32, 16);
-          const material = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
-          const sphere = new THREE.Mesh(geometry, material);
-          scene.add(sphere);
-
-          // 创建动画混合器
-          this.mixer = new THREE.AnimationMixer(sphere);
-
-          /**
-           * 创建自定义动画对象(控制position)
-           * @param {string} name 必传参数,关键帧轨道(KeyframeTrack)的标识符(model或者物体的属性)
-           * @param {array} times 关键帧的时间数组
-           * @param {array} values 与时间数组的时间点对应的值数组
-           */
-          this.animation1 = new THREE.VectorKeyframeTrack(
-            '.position', // 要控制关键帧的属性名称
-            [0, 3, 10],
-            [
-              1,
-              1,
-              1, //第一帧位置 0秒的位置
-              50,
-              50,
-              50, //第二帧位置 3秒的位置
-              20,
-              20,
-              20, //第三帧位置 10秒的位置
-            ]
-          );
-
-          // 创建自定义动画对象(控制scale)
-          this.animation2 = new THREE.VectorKeyframeTrack(
-            '.scale', //要控制关键帧的属性名称
-            [0, 3, 10],
-            [
-              1,
-              1,
-              1, //第0帧scale
-              50,
-              50,
-              50, //第3帧scale
-              20,
-              20,
-              20, //第10帧scale
-            ]
-          );
-
-          /**
-           * 创建动画剪辑对象
-           * @param {string} name 动画剪辑对象的名称
-           * @param {number} duration 动画剪辑对象的名称
-           * @param {array} tracks 自定义动画对象数组
-           */
-          const clip = new THREE.AnimationClip(
-            'action', //动画名称
-            10, //动画持续时间
-            [this.animation1, this.animation2] //轨迹
-          );
-
-          // 使用动画混合器裁剪动画编辑对象得到动画对象(AnimationAction),通过动画对象,可以设置动画播放的各个参数以及播放时的各个参数
-          let action = this.mixer.clipAction(clip);
-
-          // 播放动画
-          action.play();
-
-          // 将动画保存到animation中,便于后续调用
-          sphere.animations.push(clip);
-        }
+          // 更新动画
+          this.mixer && this.mixer.update(delta);
+        });
       }
-      const currentDemo = new CurrentDemo();
-    </script>
-  </body>
+
+      // 本次demo实现初始化函数
+      initFn() {
+        // 解构获取
+        const { camera, renderer, controls, scene, width, height } = this.option;
+
+        // 设置相机初始位置
+        camera.position.set(25, 25, 5);
+
+        // 创建时钟
+        this.clock = new THREE.Clock();
+
+        // 辅助线
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // 创建球体
+        const geometry = new THREE.SphereGeometry(1, 32, 16);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+        const sphere = new THREE.Mesh(geometry, material);
+        sphere.name = 'sphere'
+        sphere.scale.set(5, 5, 5)
+        scene.add(sphere);
+
+        // 创建动画混合器
+        this.mixer = new THREE.AnimationMixer(sphere);
+
+        /**
+         * 创建自定义动画对象(控制position)
+         * @param {string} name 必传参数,关键帧轨道(KeyframeTrack)的标识符(model或者物体的属性)
+         * @param {array} times 关键帧的时间数组
+         * @param {array} values 与时间数组的时间点对应的值数组
+         */
+        this.animation1 = new THREE.VectorKeyframeTrack(
+          '.rotation[x]',
+          [0, 1], [0, Math.PI / 2]
+        )
+
+        // 创建自定义动画对象(控制scale)
+        this.animation2 = new THREE.VectorKeyframeTrack(
+          '.scale', //要控制关键帧的属性名称
+          [0, 3,],
+          [
+            1,
+            1,
+            1, //第0帧scale
+            50,
+            50,
+            50, //第3帧scale
+            20,
+            20,
+            20, //第10帧scale
+          ]
+        );
+
+        /**
+         * 创建动画剪辑对象
+         * @param {string} name 动画剪辑对象的名称
+         * @param {number} duration 动画剪辑对象的名称
+         * @param {array} tracks 自定义动画对象数组
+         */
+        const clip = new THREE.AnimationClip(
+          'action', //动画名称
+          5, //动画持续时间
+          [this.animation1] //轨迹
+        );
+
+        // 使用动画混合器裁剪动画编辑对象得到动画对象(AnimationAction),通过动画对象,可以设置动画播放的各个参数以及播放时的各个参数
+        let action = this.mixer.clipAction(clip);
+
+        // 播放动画
+        action.play();
+
+        // 将动画保存到animation中,便于后续调用
+        sphere.animations.push(clip);
+      }
+    }
+    const currentDemo = new CurrentDemo();
+  </script>
+</body>
+
 </html>
