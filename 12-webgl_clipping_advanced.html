@@ -1,0 +1,160 @@
+<!--
+ * @Author: wangzhiyu
+ * @Date: 2023-10-11 16:50:27
+ * @LastEditors: wangzhiyu
+ * @LastEditTime: 2023-10-12 19:16:32
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./public/favicon.ico" />
+  <link rel="stylesheet" href="./base.css" />
+  <title>template</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="importmap">
+      {
+        "imports": {
+          "three": "./threeSource/three.module.js",
+          "three/addons/": "./public/"
+        }
+      }
+    </script>
+  <script type="module">
+    // 初始化threejs模板
+    import { InitThree, THREE } from './initThree.js';
+
+    import Stats from 'three/addons/libs/stats.module.js';
+
+    class CurrentDemo extends InitThree {
+      constructor() {
+        super({
+          camera: new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.25, 16)
+        });
+
+        this.render(() => {
+          this.stats && this.stats.update()
+        });
+
+        // 实时帧率显示
+        this.showFPS()
+
+        // 本地demo实现
+        this.demoAchieve()
+      }
+
+      demoAchieve() {
+        const { scene, camera, controls } = this.option
+        controls.target.set(0, 1, 0)
+
+        // 设置相机的位置
+        camera.position.set(0, 1.5, 3)
+
+        // 添加环境光
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5))
+
+        // 添加聚光灯
+        const spot = new THREE.SpotLight(0xffffff, 0.5)
+        // 设置聚光灯的 光纤散射角度(聚光灯的最大范围)
+        spot.angle = Math.PI / 5
+        // 设置聚光灯的 聚光锥的半影衰减百分比,0-1之间,默认为0
+        spot.penumbra = 0.2
+        // 设置聚光灯的位置
+        spot.position.set(2, 3, 3)
+        // 设置聚光灯投射阴影
+        spot.castShadow = true
+        // 设置聚光灯的阴影相机的最大近端面
+        spot.shadow.camera.near = 3
+        // 设置聚光灯的阴影相机的最大远端面
+        spot.shadow.camera.far = 10
+        // 设置聚光灯的阴影投射的宽度
+        spot.shadow.mapSize.width = 1024
+        // 设置聚光灯的阴影投射的高度
+        spot.shadow.mapSize.height = 1024
+        scene.add(spot)
+
+        // 添加平行光
+        const direction = new THREE.DirectionalLight(0xffffff, 0.5)
+        // 设置平行光的位置
+        direction.position.set(0, 3, 0)
+        // 设置平行光投射阴影
+        direction.castShadow = true
+        // 设置平行光投射的阴影的最大近端面
+        direction.shadow.camera.near = 1
+        // 设置平行光投射的阴影的最大远端面
+        direction.shadow.camera.far = 10
+        // 设置平行光投射的阴影的左侧偏移量
+        direction.shadow.camera.left = -1
+        // 设置平行光投射的阴影的右侧偏移量
+        direction.shadow.camera.right = 1
+        // 设置平行光投射的阴影的上侧偏移量
+        direction.shadow.camera.top = 1
+        // 设置平行光投射的阴影的下侧偏移量
+        direction.shadow.camera.bottom = -1
+        // 设置平行光阴影的最大宽度
+        direction.shadow.mapSize.width = 1024
+        // 设置平行光阴影的最大高度
+        direction.shadow.mapSize.height = 1024
+        scene.add(direction)
+
+        // 平面立方体
+        const planCube = new THREE.PlaneGeometry(3, 3, 1, 1)
+        // 平面立方体材质
+        const planMaterial = new THREE.MeshPhongMaterial({ color: 0xa0adaf, shininess: 10 })
+        // 创建平面立方体
+        const planMesh = new THREE.Mesh(planCube, planMaterial)
+        // 旋转平面立方体,平铺
+        planMesh.rotation.x = -Math.PI / 2
+        // 设置立方体缩放,multiplyScalar是将当前立方体的缩放值乘以参数然后应用到每个轴中,scale.set()是指将每个轴的缩放到指定的数值
+        planMesh.scale.multiplyScalar(3);
+        // 立方体添加进场景中
+        scene.add(planMesh)
+
+        // 创建装载方块的组
+        const boxGroup = new THREE.Group()
+        // 设置方块立方体
+        const box = new THREE.BoxGeometry(0.18, 0.18, 0.18);
+        // 设置方块立方体材质
+        const boxMaterial = new THREE.MeshPhongMaterial({
+          color: 0xee0a10, // 设置材质颜色
+          shininess: 100, // 设置材质亮度
+          side: THREE.DoubleSide, // 设置立方体正反面都显示
+          // clippingPlans: [], // 设置裁剪立方体的面
+          // clipShadows: true // 设置裁剪的阴影一并裁剪
+        })
+
+        // 循环生成方块
+        for (let z = -2; z <= 2; z++) {
+          for (let y = -2; y <= 2; y++) {
+            for (let z = -2; z <= 2; z++) {
+              // 创建盒子
+              const boxMesh = new THREE.Mesh(box, boxMaterial)
+              // 设置盒子的位置
+              boxMesh.position.set(x / 5, y / 5, z / 5)
+              // 盒子添加到box组中
+              boxGroup.add(boxMesh)
+            }
+          }
+        }
+        // 设置box组向上偏移位置
+        boxGroup.position.y = 1;
+        scene.add(boxGroup)
+      }
+
+
+      // 实时帧率显示
+      showFPS() {
+        this.stats = new Stats()
+        document.querySelector(this.option.root).appendChild(this.stats.dom)
+      }
+    }
+    const currentDemo = new CurrentDemo();
+  </script>
+</body>
+
+</html>

@@ -60,6 +60,7 @@
     animationSlider.addEventListener('input', function () {
       const progress = parseFloat(animationSlider.value);
       action.time = action.getClip().duration * progress;
+      console.log(action.time, 'action.time');
       mixer.update(0);
     });
 
