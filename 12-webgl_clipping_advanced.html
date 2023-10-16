@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-10-11 16:50:27
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-10-12 19:16:32
+ * @LastEditTime: 2023-10-16 19:12:27
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -37,8 +37,12 @@
           camera: new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.25, 16)
         });
 
-        this.render(() => {
+        this.render((value) => {
           this.stats && this.stats.update()
+          if (this.boxGroup) {
+            this.boxGroup.rotation.x += 0.02
+            this.boxGroup.rotation.y += 0.02
+          }
         });
 
         // 实时帧率显示
@@ -48,13 +52,42 @@
         this.demoAchieve()
       }
 
+      // 本地demo实现
       demoAchieve() {
-        const { scene, camera, controls } = this.option
+        const { scene, camera, controls, renderer } = this.option
+
+        // 设置控制器,渲染器等属性
+        this.setAttribute(controls, renderer, camera)
+
+        // 操作灯光
+        this.addLight(scene)
+
+        // 添加方块组
+        this.addBoxGroup(scene)
+
+        // 添加剪切组
+        this.addPlansGroup(scene)
+
+      }
+
+      // 设置控制器,渲染器等属性
+      setAttribute(controls, renderer, camera) {
+        // 设置控制器的焦点
         controls.target.set(0, 1, 0)
+        // 设置控制器的最大缩放值
+        controls.maxDistance = 8
+        // 设置控制器的最小缩放值
+        controls.minDistance = 1
+
+        // 设置渲染器开启渲染阴影
+        renderer.shadowMap.enabled = true
 
         // 设置相机的位置
         camera.position.set(0, 1.5, 3)
+      }
 
+      // 添加灯光
+      addLight(scene) {
         // 添加环境光
         scene.add(new THREE.AmbientLight(0xffffff, 0.5))
 
@@ -101,7 +134,10 @@
         // 设置平行光阴影的最大高度
         direction.shadow.mapSize.height = 1024
         scene.add(direction)
+      }
 
+      // 添加方块组
+      addBoxGroup(scene) {
         // 平面立方体
         const planCube = new THREE.PlaneGeometry(3, 3, 1, 1)
         // 平面立方体材质
@@ -112,11 +148,13 @@
         planMesh.rotation.x = -Math.PI / 2
         // 设置立方体缩放,multiplyScalar是将当前立方体的缩放值乘以参数然后应用到每个轴中,scale.set()是指将每个轴的缩放到指定的数值
         planMesh.scale.multiplyScalar(3);
+        // 设置平面可以接收阴影
+        planMesh.receiveShadow = true
         // 立方体添加进场景中
         scene.add(planMesh)
 
         // 创建装载方块的组
-        const boxGroup = new THREE.Group()
+        this.boxGroup = new THREE.Group()
         // 设置方块立方体
         const box = new THREE.BoxGeometry(0.18, 0.18, 0.18);
         // 设置方块立方体材质
@@ -129,23 +167,50 @@
         })
 
         // 循环生成方块
-        for (let z = -2; z <= 2; z++) {
+        for (let x = -2; x <= 2; x++) {
           for (let y = -2; y <= 2; y++) {
             for (let z = -2; z <= 2; z++) {
               // 创建盒子
               const boxMesh = new THREE.Mesh(box, boxMaterial)
               // 设置盒子的位置
               boxMesh.position.set(x / 5, y / 5, z / 5)
+              boxMesh.castShadow = true
               // 盒子添加到box组中
-              boxGroup.add(boxMesh)
+              this.boxGroup.add(boxMesh)
             }
           }
         }
         // 设置box组向上偏移位置
-        boxGroup.position.y = 1;
-        scene.add(boxGroup)
+        this.boxGroup.position.y = 1;
+        // 将box组添加到场景中
+        scene.add(this.boxGroup)
       }
 
+      // 添加剪切组
+      addPlansGroup(scene) {
+        // 定义三角形顶点数组
+        this.vertices = [
+          new THREE.Vector3(+1, 0, +Math.SQRT1_2),
+          new THREE.Vector3(-1, 0, +Math.SQRT1_2),
+          new THREE.Vector3(0, +1, -Math.SQRT1_2),
+          new THREE.Vector3(0, -1, -Math.SQRT1_2),
+        ]
+
+        // 定义三角形指数
+        this.indices = [0, 1, 2, 0, 2, 3, 0, 3, 1, 1, 3, 2]
+
+        // 根据三角形指数数量进行循环,生成对应数量的三角形平面
+        const n = this.indices.length / 3
+
+        // 建立空数组,装载处理好的plane
+        this.result = []
+
+        for (let i = 0, j = 0; i < n; ++i, j += 3) {
+          let a = this.vertices[this.indices[j]], b = this.vertices[this.indices[j + 1]], c = this.vertices[this.indices[j + 2]]
+
+          this.result.push(new THREE.Plane().setFromCoplanarPoints(a, b, c))
+        }
+      }
 
       // 实时帧率显示
       showFPS() {
