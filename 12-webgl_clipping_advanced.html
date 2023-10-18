@@ -2,7 +2,7 @@
  * @Author: wangzhiyu
  * @Date: 2023-10-11 16:50:27
  * @LastEditors: wangzhiyu
- * @LastEditTime: 2023-10-16 19:12:27
+ * @LastEditTime: 2023-10-18 16:43:22
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -40,8 +40,8 @@
         this.render((value) => {
           this.stats && this.stats.update()
           if (this.boxGroup) {
-            this.boxGroup.rotation.x += 0.02
-            this.boxGroup.rotation.y += 0.02
+            this.boxGroup.rotation.x += 0.01
+            this.boxGroup.rotation.y += 0.01
           }
         });
 
@@ -62,12 +62,13 @@
         // 操作灯光
         this.addLight(scene)
 
-        // 添加方块组
-        this.addBoxGroup(scene)
-
         // 添加剪切组
         this.addPlansGroup(scene)
 
+        // 添加方块组
+        this.addBoxGroup(scene)
+
+        this.planeVolumeVisualization(scene)
       }
 
       // 设置控制器,渲染器等属性
@@ -139,11 +140,11 @@
       // 添加方块组
       addBoxGroup(scene) {
         // 平面立方体
-        const planCube = new THREE.PlaneGeometry(3, 3, 1, 1)
+        this.planCube = new THREE.PlaneGeometry(3, 3, 1, 1)
         // 平面立方体材质
         const planMaterial = new THREE.MeshPhongMaterial({ color: 0xa0adaf, shininess: 10 })
         // 创建平面立方体
-        const planMesh = new THREE.Mesh(planCube, planMaterial)
+        const planMesh = new THREE.Mesh(this.planCube, planMaterial)
         // 旋转平面立方体,平铺
         planMesh.rotation.x = -Math.PI / 2
         // 设置立方体缩放,multiplyScalar是将当前立方体的缩放值乘以参数然后应用到每个轴中,scale.set()是指将每个轴的缩放到指定的数值
@@ -158,12 +159,12 @@
         // 设置方块立方体
         const box = new THREE.BoxGeometry(0.18, 0.18, 0.18);
         // 设置方块立方体材质
-        const boxMaterial = new THREE.MeshPhongMaterial({
+        this.boxMaterial = new THREE.MeshPhongMaterial({
           color: 0xee0a10, // 设置材质颜色
           shininess: 100, // 设置材质亮度
           side: THREE.DoubleSide, // 设置立方体正反面都显示
-          // clippingPlans: [], // 设置裁剪立方体的面
-          // clipShadows: true // 设置裁剪的阴影一并裁剪
+          clippingPlanes: this.createPlanes(this.result.length), // 设置裁剪立方体的面
+          clipShadows: true // 设置裁剪的阴影一并裁剪
         })
 
         // 循环生成方块
@@ -171,7 +172,7 @@
           for (let y = -2; y <= 2; y++) {
             for (let z = -2; z <= 2; z++) {
               // 创建盒子
-              const boxMesh = new THREE.Mesh(box, boxMaterial)
+              const boxMesh = new THREE.Mesh(box, this.boxMaterial)
               // 设置盒子的位置
               boxMesh.position.set(x / 5, y / 5, z / 5)
               boxMesh.castShadow = true
@@ -205,11 +206,57 @@
         // 建立空数组,装载处理好的plane
         this.result = []
 
+        // 循环四次,生成四个平面的每三个位置,创建平面
         for (let i = 0, j = 0; i < n; ++i, j += 3) {
-          let a = this.vertices[this.indices[j]], b = this.vertices[this.indices[j + 1]], c = this.vertices[this.indices[j + 2]]
-
-          this.result.push(new THREE.Plane().setFromCoplanarPoints(a, b, c))
+          let a = this.vertices[this.indices[j]]
+          let b = this.vertices[this.indices[j + 1]]
+          let c = this.vertices[this.indices[j + 2]]
+          this.result[i] = new THREE.Plane().setFromCoplanarPoints(a, b, c)
         }
+
+
+        this.GlobalClippingPlanes = this.cylindricalPlanes(5, 2.5)
+      }
+
+      // 生成plane面
+      createPlanes(n) {
+        const result = new Array(n)
+        for (let i = 0; i !== n; ++i) result[i] = new THREE.Plane()
+        return result
+      }
+
+      cylindricalPlanes(n, innerRadius) {
+        const result = this.createPlanes(n);
+        for (let i = 0; i !== n; ++i) {
+          const plane = result[i],
+            angle = (i * Math.PI * 2) / n;
+
+          plane.normal.set(Math.cos(angle), 0, Math.sin(angle));
+
+          plane.constant = innerRadius;
+        }
+        return result;
+      }
+
+      planeVolumeVisualization(scene) {
+        console.log(this.boxMaterial.clippingPlanes, 'this.boxMaterial.clippingPlanes');
+        this.volumeVisualization = new THREE.Group()
+        // this.volumeVisualization.visible = false
+        for (let i = 0, n = this.result.length; i !== n; ++i) {
+          const material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color().setHSL(i / n, 0.5, 0.5).getHex(),
+            side: THREE.DoubleSide,
+            opacity: 0.2,
+            transparent: true,
+            clippingPlanes: this.boxMaterial.clippingPlanes.filter((item, index) => index !== i)
+          })
+
+          const mesh = new THREE.Mesh(this.planCube, material)
+          mesh.matrixAutoUpdate = false;
+          this.volumeVisualization.add(mesh)
+        }
+
+        scene.add(this.volumeVisualization)
       }
 
       // 实时帧率显示
