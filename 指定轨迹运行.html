@@ -1,0 +1,106 @@
+<!--
+ * @Author: wangzhiyu <w19165802736@163.com>
+ * @version: 1.0.0
+ * @Date: 2023-12-20 16:24:12
+ * @LastEditTime: 2023-12-20 16:33:14
+ * @Descripttion: 
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>星空主题首页</title>
+  <style>
+    body {
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <script type="importmap">
+          {
+            "imports": {
+              "three": "./threeSource/three.module.js",
+              "three/addons/": "./public/"
+            }
+          }
+        </script>
+  <script type="module">
+    import * as THREE from 'three';
+    // 导入控制器
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    console.log(THREE, 'THREE');
+    console.log(OrbitControls, 'OrbitControls');
+    // 创建场景
+    const scene = new THREE.Scene();
+
+    // 创建相机
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 50;
+
+    // 创建渲染器
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 添加星空背景
+    const starsGeometry = new THREE.BufferGeometry();
+    const starsMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.1 });
+
+    const starsVertices = [];
+    for (let i = 0; i < 10000; i++) {
+      const x = (Math.random() - 0.5) * 2000;
+      const y = (Math.random() - 0.5) * 2000;
+      const z = (Math.random() - 0.5) * 2000;
+      starsVertices.push(x, y, z);
+    }
+
+    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+    const stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
+
+    // 添加飞机
+    const planeGeometry = new THREE.PlaneGeometry(1, 1);
+    const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x00FFFF, side: THREE.DoubleSide });
+    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    scene.add(plane);
+
+    // 添加轨迹
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-10, -10, 0),
+      new THREE.Vector3(0, 10, 10),
+      new THREE.Vector3(10, -10, 0),
+      new THREE.Vector3(0, -10, -10),
+      new THREE.Vector3(-10, -10, 0)
+    ]);
+
+    const points = curve.getPoints(50);
+    const pathGeometry = new THREE.BufferGeometry().setFromPoints(points);
+    const pathMaterial = new THREE.LineBasicMaterial({ color: 0xFF0000 });
+    const path = new THREE.Line(pathGeometry, pathMaterial);
+    scene.add(path);
+
+    // 控制相机
+    const controls = new OrbitControls(camera, renderer.domElement);
+
+    // 动画循环
+    const animate = () => {
+      requestAnimationFrame(animate);
+
+      // 飞机沿着轨迹移动
+      const position = curve.getPointAt((Date.now() % 10000) / 10000);
+      plane.position.copy(position);
+
+      controls.update();
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+  </script>
+</body>
+
+</html>

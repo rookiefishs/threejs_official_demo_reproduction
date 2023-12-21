@@ -1,8 +1,8 @@
 <!--
  * @Author: wangzhiyu
  * @Date: 2023-10-11 16:50:27
- * @LastEditors: flash
- * @LastEditTime: 2023-11-20 16:05:26
+ * @LastEditors: DESKTOP-NOV61E3
+ * @LastEditTime: 2023-12-12 15:45:35
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -177,6 +177,7 @@
       addBoxGroup(scene) {
         // 平面立方体
         this.planCube = new THREE.PlaneGeometry(3, 3, 1, 1)
+
         // 平面立方体材质
         const planMaterial = new THREE.MeshPhongMaterial({ color: 0xa0adaf, shininess: 10 })
         // 创建平面立方体
@@ -258,6 +259,8 @@
           const c = vertices[indices[j + 2]];
 
           result[i] = new THREE.Plane().setFromCoplanarPoints(a, b, c);
+          let helper = new THREE.PlaneHelper(result[i])
+          this.option.scene.add(helper);
         }
         return result;
       }
@@ -300,8 +303,12 @@
 
       createPlanes(n) {
         const result = new Array(n);
-        for (let i = 0; i !== n; ++i)
+        for (let i = 0; i !== n; ++i) {
+
           result[i] = new THREE.Plane();
+          let helper = new THREE.PlaneHelper(result[i])
+          this.option.scene.add(helper)
+        }
         return result;
       }
 
